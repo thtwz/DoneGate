@@ -1,0 +1,17 @@
+.DS_Store
+.coverage
+.pytest_cache/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+.delivery-mcp/
+build/
+dist/
+
+src/delivery_mcp/__pycache__/
+src/delivery_mcp/*/__pycache__/
+src/delivery_mcp/*/*/__pycache__/
+tests/__pycache__/
+delivery_mcp/__pycache__/
