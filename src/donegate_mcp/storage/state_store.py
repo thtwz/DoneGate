@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from delivery_mcp.config import PLAN_FILENAME, PROGRESS_FILENAME
-from delivery_mcp.storage.fs import atomic_write_json, read_json
+from donegate_mcp.config import PLAN_FILENAME, PROGRESS_FILENAME
+from donegate_mcp.storage.fs import atomic_write_json, read_json
 
 
 class StateStore:

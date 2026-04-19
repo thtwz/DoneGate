@@ -3,8 +3,7 @@
 ## Brand
 
 Project name: `DoneGate MCP`
-
-Public-facing docs should use DoneGate MCP consistently. The internal Python module path can remain `delivery_mcp` for compatibility until a later migration.
+Public-facing docs and code-facing package names should use `DoneGate MCP` / `donegate_mcp` consistently.
 
 ## Core framing
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def run_cli(tmp_path, *args: str) -> subprocess.CompletedProcess[str]:
-    cmd = [sys.executable, "-m", "delivery_mcp.cli.main", "--data-root", str(tmp_path / ".delivery-mcp"), *args]
+    cmd = [sys.executable, "-m", "donegate_mcp.cli.main", "--data-root", str(tmp_path / ".donegate-mcp"), *args]
     return subprocess.run(cmd, capture_output=True, text=True, check=False)
 
 

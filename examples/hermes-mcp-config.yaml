@@ -1,16 +1,16 @@
 # Example Hermes MCP config snippet
 mcp_servers:
-  delivery_mcp:
+  donegate_mcp:
     command: "python3"
     args:
       - "-c"
       - |
-        from delivery_mcp.mcp.server import build_app
-        app = build_app('.delivery-mcp')
+        from donegate_mcp.mcp.server import build_app
+        app = build_app('.donegate-mcp')
         server = app.server
         if hasattr(server, 'run'):
             server.run()
         else:
-            print('delivery-mcp fallback server loaded; use CLI for local dev')
+            print('donegate-mcp fallback server loaded; use CLI for local dev')
     timeout: 120
     connect_timeout: 30

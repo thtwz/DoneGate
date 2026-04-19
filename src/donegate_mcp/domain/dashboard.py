@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections import Counter
 
-from delivery_mcp.domain.lifecycle import needs_docs, needs_verification, next_action_rank, normalize_task
-from delivery_mcp.models import DashboardSummary, Task, TaskStatus
+from donegate_mcp.domain.lifecycle import needs_docs, needs_verification, next_action_rank, normalize_task
+from donegate_mcp.models import DashboardSummary, Task, TaskStatus
 
 
 def _task_brief(task: Task) -> dict[str, str | None | bool]:

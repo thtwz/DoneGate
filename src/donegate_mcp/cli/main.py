@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 import sys
 
-from delivery_mcp.cli.formatters import render
-from delivery_mcp.domain.services import DeliveryService
-from delivery_mcp.errors import DeliveryMcpError, TransitionError, ValidationError
+from donegate_mcp.cli.formatters import render
+from donegate_mcp.domain.services import DoneGateService
+from donegate_mcp.errors import DoneGateMcpError, TransitionError, ValidationError
 
 
 def _csv_list(value: str | None) -> list[str] | None:
@@ -15,7 +15,7 @@ def _csv_list(value: str | None) -> list[str] | None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="delivery-mcp")
+    parser = argparse.ArgumentParser(prog="donegate-mcp")
     parser.add_argument("--data-root", default=None)
     parser.add_argument("--json", action="store_true", dest="as_json")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -110,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    service = DeliveryService(data_root=args.data_root)
+    service = DoneGateService(data_root=args.data_root)
     try:
         if args.command == "init":
             payload = service.init_project(args.project_name, default_branch=args.default_branch)
@@ -136,12 +136,12 @@ def main(argv: list[str] | None = None) -> int:
     except ValidationError as exc:
         print(render({"ok": False, "errors": [str(exc)]}, args.as_json))
         return 2
-    except DeliveryMcpError as exc:
+    except DoneGateMcpError as exc:
         print(render({"ok": False, "errors": [str(exc)]}, args.as_json))
         return 4
 
 
-def _run_task_command(service: DeliveryService, args: argparse.Namespace) -> dict:
+def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dict:
     cmd = args.task_command
     if cmd == "create":
         return service.create_task(args.title, args.spec_ref, summary=args.summary, verification_mode=args.verification_mode, test_commands=args.test_commands, required_doc_refs=args.required_doc_refs, required_artifacts=args.required_artifacts, plan_node_id=args.plan_node_id)

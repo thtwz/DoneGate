@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from delivery_mcp.domain.services import DeliveryService
-from delivery_mcp.errors import DeliveryMcpError
+from donegate_mcp.domain.services import DoneGateService
+from donegate_mcp.errors import DoneGateMcpError
 
 
 class SimpleToolServer:
@@ -17,15 +17,15 @@ class SimpleToolServer:
         return decorator
 
 
-class DeliveryMcpApp:
+class DoneGateMcpApp:
     def __init__(self, data_root: str | None = None) -> None:
-        self.service = DeliveryService(data_root=data_root)
+        self.service = DoneGateService(data_root=data_root)
         self.server = self._build_server()
 
     def _build_server(self) -> Any:
         try:
             from mcp.server.fastmcp import FastMCP  # type: ignore
-            server: Any = FastMCP("delivery-mcp")
+            server: Any = FastMCP("donegate-mcp")
         except Exception:
             server = SimpleToolServer()
         self._register_tools(server)
@@ -92,9 +92,9 @@ class DeliveryMcpApp:
     def _safe(func: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> dict[str, Any]:
         try:
             return func(*args, **kwargs)
-        except DeliveryMcpError as exc:
+        except DoneGateMcpError as exc:
             return {"ok": False, "errors": [str(exc)]}
 
 
-def build_app(data_root: str | None = None) -> DeliveryMcpApp:
-    return DeliveryMcpApp(data_root=data_root)
+def build_app(data_root: str | None = None) -> DoneGateMcpApp:
+    return DoneGateMcpApp(data_root=data_root)

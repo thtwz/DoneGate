@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from delivery_mcp.errors import TransitionError
-from delivery_mcp.models import DocSyncStatus, Task, TaskStatus, VerificationStatus, utc_now
+from donegate_mcp.errors import TransitionError
+from donegate_mcp.models import DocSyncStatus, Task, TaskStatus, VerificationStatus, utc_now
 
 _ALLOWED_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.DRAFT: {TaskStatus.READY, TaskStatus.BLOCKED},

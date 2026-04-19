@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 
-from delivery_mcp.domain.lifecycle import apply_doc_sync, apply_transition, apply_verification, project_status
-from delivery_mcp.errors import TransitionError
-from delivery_mcp.models import DocSyncStatus, Task, TaskStatus, VerificationStatus
+from donegate_mcp.domain.lifecycle import apply_doc_sync, apply_transition, apply_verification, project_status
+from donegate_mcp.errors import TransitionError
+from donegate_mcp.models import DocSyncStatus, Task, TaskStatus, VerificationStatus
 
 
 def make_task(status: TaskStatus = TaskStatus.DRAFT) -> Task:

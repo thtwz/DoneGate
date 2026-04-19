@@ -2,21 +2,21 @@ from __future__ import annotations
 
 import json
 
-from delivery_mcp.domain.services import DeliveryService
+from donegate_mcp.domain.services import DoneGateService
 
 
 def test_init_and_create_task_persists_files(tmp_path) -> None:
-    service = DeliveryService(tmp_path / ".delivery-mcp")
+    service = DoneGateService(tmp_path / ".donegate-mcp")
     init_payload = service.init_project("demo")
     assert init_payload["ok"] is True
 
     create_payload = service.create_task("Gate task", "docs/spec.md", summary="summary")
     assert create_payload["task"]["task_id"] == "TASK-0001"
 
-    task_file = tmp_path / ".delivery-mcp" / "tasks" / "TASK-0001.json"
-    event_file = tmp_path / ".delivery-mcp" / "events" / "TASK-0001.jsonl"
-    plan_file = tmp_path / ".delivery-mcp" / "plan.json"
-    progress_file = tmp_path / ".delivery-mcp" / "progress.json"
+    task_file = tmp_path / ".donegate-mcp" / "tasks" / "TASK-0001.json"
+    event_file = tmp_path / ".donegate-mcp" / "events" / "TASK-0001.jsonl"
+    plan_file = tmp_path / ".donegate-mcp" / "plan.json"
+    progress_file = tmp_path / ".donegate-mcp" / "progress.json"
     assert task_file.exists()
     assert event_file.exists()
     assert plan_file.exists()
@@ -24,14 +24,14 @@ def test_init_and_create_task_persists_files(tmp_path) -> None:
 
 
 def test_service_gate_flow(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
+    root = tmp_path / ".donegate-mcp"
     docs = tmp_path / "docs"
     reports = tmp_path / "reports"
     docs.mkdir()
     reports.mkdir()
     (docs / "plan.md").write_text("ok", encoding="utf-8")
     (reports / "pytest.txt").write_text("ok", encoding="utf-8")
-    service = DeliveryService(root)
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Gate task", "docs/spec.md", required_doc_refs=[str(docs / 'plan.md')], required_artifacts=[str(reports / 'pytest.txt')])
     task_id = created["task"]["task_id"]
@@ -49,14 +49,14 @@ def test_service_gate_flow(tmp_path) -> None:
 
 
 def test_service_gate_flow_is_order_independent_for_verification_and_doc_sync(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
+    root = tmp_path / ".donegate-mcp"
     docs = tmp_path / "docs"
     reports = tmp_path / "reports"
     docs.mkdir()
     reports.mkdir()
     (docs / "plan.md").write_text("ok", encoding="utf-8")
     (reports / "pytest.txt").write_text("ok", encoding="utf-8")
-    service = DeliveryService(root)
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Gate task", "docs/spec.md", required_doc_refs=[str(docs / 'plan.md')], required_artifacts=[str(reports / 'pytest.txt')])
     task_id = created["task"]["task_id"]
@@ -73,8 +73,8 @@ def test_service_gate_flow_is_order_independent_for_verification_and_doc_sync(tm
 
 
 def test_transition_to_verified_returns_compatibility_warning(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Compat transition", "docs/spec.md")
     task_id = created["task"]["task_id"]
@@ -92,8 +92,8 @@ def test_transition_to_verified_returns_compatibility_warning(tmp_path) -> None:
 
 
 def test_list_tasks_normalizes_stale_persisted_status(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Stale task", "docs/spec.md")
     task_id = created["task"]["task_id"]
@@ -114,8 +114,8 @@ def test_list_tasks_normalizes_stale_persisted_status(tmp_path) -> None:
 
 
 def test_dashboard_is_fact_driven_even_when_task_file_is_stale(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Needs docs", "docs/spec.md")
     task_id = created["task"]["task_id"]

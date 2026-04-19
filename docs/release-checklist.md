@@ -15,7 +15,7 @@ Use this checklist before tagging or publishing a release.
 - `pyproject.toml` version is correct
 - Package name and CLI entrypoints are correct
 - The public brand is consistently `DoneGate MCP`
-- Internal `delivery_mcp` compatibility notes are still accurate
+- Python module and CLI names are consistently `donegate_mcp` / `donegate-mcp`
 
 ## Quality gate behavior
 
@@ -35,7 +35,6 @@ Use this checklist before tagging or publishing a release.
 
 - Decide whether the release should also update examples or docs
 - Confirm whether a `LICENSE` file is present and correct
-- Confirm whether the release notes need to mention any compatibility caveats
 - Tag only after docs and test results match what you are publishing
 
 ## Nice-to-have before public launch

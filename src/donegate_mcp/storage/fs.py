@@ -5,8 +5,8 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-from delivery_mcp.config import DEFAULT_ENCODING
-from delivery_mcp.errors import StorageError
+from donegate_mcp.config import DEFAULT_ENCODING
+from donegate_mcp.errors import StorageError
 
 
 def ensure_dir(path: Path) -> Path:

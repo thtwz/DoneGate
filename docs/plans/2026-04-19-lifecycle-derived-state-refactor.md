@@ -1,8 +1,8 @@
-# delivery-mcp Lifecycle Derived-State Refactor Plan
+# donegate-mcp Lifecycle Derived-State Refactor Plan
 
 > **For Hermes:** Use subagent-driven-development to execute this plan task-by-task. Keep changes small and verify after each slice.
 
-**Goal:** Remove order-coupling and hand-driven lifecycle drift in delivery-mcp by making task lifecycle status a projection of domain facts instead of a fragile manually advanced sequence.
+**Goal:** Remove order-coupling and hand-driven lifecycle drift in donegate-mcp by making task lifecycle status a projection of domain facts instead of a fragile manually advanced sequence.
 
 **Architecture:** Keep the existing Task record and MCP/CLI APIs, but refactor lifecycle handling so `verification_status`, `doc_sync_status`, `blocked_reason`, `needs_revalidation`, and completion timestamps become the primary facts. Introduce a single lifecycle projection function that derives the effective workflow phase (`draft`, `ready`, `in_progress`, `awaiting_verification`, `documented`, `done`, `blocked`) from those facts, then shrink imperative transition rules to only the steps that represent user intent rather than internal progress bookkeeping.
 
@@ -105,7 +105,7 @@ Instead:
 **Objective:** Create one canonical place that computes the effective task status from task facts.
 
 **Files:**
-- Modify: `src/delivery_mcp/domain/lifecycle.py`
+- Modify: `src/donegate_mcp/domain/lifecycle.py`
 - Test: `tests/test_lifecycle.py`
 
 **Step 1: Write failing tests**
@@ -136,8 +136,8 @@ pytest tests/test_lifecycle.py -q
 **Objective:** Ensure verification/doc sync/block/start/close actions all end by projecting status from facts.
 
 **Files:**
-- Modify: `src/delivery_mcp/domain/lifecycle.py`
-- Modify: `src/delivery_mcp/domain/services.py`
+- Modify: `src/donegate_mcp/domain/lifecycle.py`
+- Modify: `src/donegate_mcp/domain/services.py`
 - Test: `tests/test_services.py`
 
 **Step 1: Add tests for order independence**
@@ -165,9 +165,9 @@ pytest tests/test_services.py tests/test_lifecycle.py -q
 **Objective:** Make transition rules represent only user intent, not mandatory internal status stepping.
 
 **Files:**
-- Modify: `src/delivery_mcp/domain/lifecycle.py`
-- Modify: `src/delivery_mcp/cli/main.py`
-- Modify: `src/delivery_mcp/domain/services.py`
+- Modify: `src/donegate_mcp/domain/lifecycle.py`
+- Modify: `src/donegate_mcp/cli/main.py`
+- Modify: `src/donegate_mcp/domain/services.py`
 - Test: `tests/test_cli.py`
 
 **Implementation direction:**
@@ -188,7 +188,7 @@ pytest tests/test_cli.py -q
 **Objective:** Prevent dashboard from becoming inconsistent with projected lifecycle.
 
 **Files:**
-- Modify: `src/delivery_mcp/domain/dashboard.py`
+- Modify: `src/donegate_mcp/domain/dashboard.py`
 - Test: `tests/test_services.py` or add `tests/test_dashboard.py`
 
 **Implementation direction:**

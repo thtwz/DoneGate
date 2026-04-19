@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from delivery_mcp.domain.dashboard import build_dashboard
-from delivery_mcp.models import Task, TaskStatus
+from donegate_mcp.domain.dashboard import build_dashboard
+from donegate_mcp.models import Task, TaskStatus
 
 
 def make_task(task_id: str, status: TaskStatus, title: str) -> Task:

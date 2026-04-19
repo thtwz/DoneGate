@@ -6,12 +6,12 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
-.delivery-mcp/
+.donegate-mcp/
 build/
 dist/
 
-src/delivery_mcp/__pycache__/
-src/delivery_mcp/*/__pycache__/
-src/delivery_mcp/*/*/__pycache__/
+src/donegate_mcp/__pycache__/
+src/donegate_mcp/*/__pycache__/
+src/donegate_mcp/*/*/__pycache__/
 tests/__pycache__/
-delivery_mcp/__pycache__/
+donegate_mcp/__pycache__/

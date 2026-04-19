@@ -7,9 +7,9 @@ from pathlib import Path
 from uuid import uuid4
 from typing import Any
 
-from delivery_mcp.config import DEVIATIONS_FILENAME, SCHEMA_VERSION, resolve_data_root
-from delivery_mcp.errors import ValidationError
-from delivery_mcp.models import (
+from donegate_mcp.config import DEVIATIONS_FILENAME, SCHEMA_VERSION, resolve_data_root
+from donegate_mcp.errors import ValidationError
+from donegate_mcp.models import (
     DocSyncRecord,
     DocSyncStatus,
     ProjectState,
@@ -21,16 +21,16 @@ from delivery_mcp.models import (
     VerificationStatus,
     utc_now,
 )
-from delivery_mcp.domain.dashboard import build_dashboard
-from delivery_mcp.domain.lifecycle import apply_block, apply_doc_sync, apply_transition, apply_verification, compatibility_warning, normalize_task
-from delivery_mcp.storage.event_store import EventStore
-from delivery_mcp.storage.fs import append_jsonl, ensure_dir
-from delivery_mcp.storage.project_store import ProjectStore
-from delivery_mcp.storage.state_store import StateStore
-from delivery_mcp.storage.task_store import TaskStore
+from donegate_mcp.domain.dashboard import build_dashboard
+from donegate_mcp.domain.lifecycle import apply_block, apply_doc_sync, apply_transition, apply_verification, compatibility_warning, normalize_task
+from donegate_mcp.storage.event_store import EventStore
+from donegate_mcp.storage.fs import append_jsonl, ensure_dir
+from donegate_mcp.storage.project_store import ProjectStore
+from donegate_mcp.storage.state_store import StateStore
+from donegate_mcp.storage.task_store import TaskStore
 
 
-class DeliveryService:
+class DoneGateService:
     def __init__(self, data_root: str | Path | None = None) -> None:
         self.data_root = resolve_data_root(data_root)
         ensure_dir(self.data_root)

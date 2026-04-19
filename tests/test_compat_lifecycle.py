@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 
-from delivery_mcp.domain.services import DeliveryService
+from donegate_mcp.domain.services import DoneGateService
 
 
 def test_old_task_json_awaiting_verification_with_all_gates_normalizes_to_documented(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("compat", "docs/spec.md")
     task_id = created["task"]["task_id"]
@@ -25,8 +25,8 @@ def test_old_task_json_awaiting_verification_with_all_gates_normalizes_to_docume
 
 
 def test_old_task_json_verified_with_synced_docs_normalizes_to_documented(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("compat", "docs/spec.md")
     task_id = created["task"]["task_id"]
@@ -44,8 +44,8 @@ def test_old_task_json_verified_with_synced_docs_normalizes_to_documented(tmp_pa
 
 
 def test_old_task_json_documented_with_done_at_normalizes_to_done(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("compat", "docs/spec.md")
     task_id = created["task"]["task_id"]

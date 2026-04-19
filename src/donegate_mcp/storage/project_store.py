@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from delivery_mcp.config import PROJECT_FILENAME
-from delivery_mcp.models import ProjectState
-from delivery_mcp.storage.fs import atomic_write_json, read_json
+from donegate_mcp.config import PROJECT_FILENAME
+from donegate_mcp.models import ProjectState
+from donegate_mcp.storage.fs import atomic_write_json, read_json
 
 
 class ProjectStore:

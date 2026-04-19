@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from delivery_mcp.config import EVENTS_DIRNAME
-from delivery_mcp.models import TaskEvent
-from delivery_mcp.storage.fs import append_jsonl, ensure_dir
+from donegate_mcp.config import EVENTS_DIRNAME
+from donegate_mcp.models import TaskEvent
+from donegate_mcp.storage.fs import append_jsonl, ensure_dir
 
 
 class EventStore:

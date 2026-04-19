@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from delivery_mcp.domain.services import DeliveryService
-from delivery_mcp.errors import TransitionError
+from donegate_mcp.domain.services import DoneGateService
+from donegate_mcp.errors import TransitionError
 
 
 def test_self_test_passes_and_records_artifacts(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Gate task", "docs/spec.md", verification_mode="self-test", test_commands=["python3 -c 'print(123)'"])
     task_id = created["task"]["task_id"]
@@ -22,8 +22,8 @@ def test_self_test_passes_and_records_artifacts(tmp_path) -> None:
 
 
 def test_self_test_failure_marks_verification_failed(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Gate task", "docs/spec.md", verification_mode="self-test", test_commands=["python3 -c 'import sys; sys.exit(7)'"])
     task_id = created["task"]["task_id"]
@@ -37,8 +37,8 @@ def test_self_test_failure_marks_verification_failed(tmp_path) -> None:
 
 
 def test_done_requires_existing_artifacts_and_doc_refs(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     doc = tmp_path / "docs" / "plan.md"
     doc.parent.mkdir(parents=True, exist_ok=True)
@@ -59,10 +59,10 @@ def test_done_requires_existing_artifacts_and_doc_refs(tmp_path) -> None:
 
 
 def test_plan_progress_and_spec_drift(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
+    root = tmp_path / ".donegate-mcp"
     spec = tmp_path / "spec.md"
     spec.write_text("v1", encoding="utf-8")
-    service = DeliveryService(root)
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Gate task", str(spec), plan_node_id="phase-1-task-a")
     task_id = created["task"]["task_id"]
@@ -76,8 +76,8 @@ def test_plan_progress_and_spec_drift(tmp_path) -> None:
 
 
 def test_deviation_recording(tmp_path) -> None:
-    root = tmp_path / ".delivery-mcp"
-    service = DeliveryService(root)
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
     service.init_project("demo")
     created = service.create_task("Gate task", "docs/spec.md")
     task_id = created["task"]["task_id"]

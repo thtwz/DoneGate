@@ -28,7 +28,7 @@ If a change expands scope significantly, open an issue or start a discussion bef
 ## Development setup
 
 ```bash
-cd /Users/mac/workspace/projects/delivery-mcp
+cd /path/to/DoneGate-MCP
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .

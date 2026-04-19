@@ -1,4 +1,4 @@
-# delivery-mcp v0.1 Architecture
+# donegate-mcp v0.1 Architecture
 
 ## 1. Design Goals
 - Keep v0.1 file-backed and deterministic.
@@ -9,7 +9,7 @@
 ## 2. Proposed Package Layout
 
 ```text
-src/delivery_mcp/
+src/donegate_mcp/
   __init__.py
   config.py                # data root, file names, defaults
   models.py                # typed domain objects and enums
@@ -51,7 +51,7 @@ pyproject.toml             # deps, console scripts, test config
 Use a single data root inside the project workspace so state is human-readable and commit-optional.
 
 ```text
-.delivery-mcp/
+.donegate-mcp/
   project.json             # workspace metadata + schema version
   tasks/
     TASK-001.json
@@ -104,7 +104,7 @@ Event types:
 Rationale: task JSON provides current state; event log preserves evidence history without requiring event sourcing everywhere.
 
 ## 4. Main Domain Objects
-Defined in `src/delivery_mcp/models.py`.
+Defined in `src/donegate_mcp/models.py`.
 
 - `ProjectState`
   - project-level metadata and task counter.
@@ -122,7 +122,7 @@ Defined in `src/delivery_mcp/models.py`.
   - counts by status, blocked tasks, tasks missing verification, tasks missing docs, next actionable tasks.
 
 ## 5. Transition and Gate Rules
-Implement in `src/delivery_mcp/domain/lifecycle.py` as pure functions plus small validators.
+Implement in `src/donegate_mcp/domain/lifecycle.py` as pure functions plus small validators.
 
 ### Intent-driven command surface
 Preferred operator commands are:
@@ -176,7 +176,7 @@ Expose intent-based methods rather than arbitrary field edits:
 - `get_dashboard()`
 
 ## 6. MCP Tool Surface
-Register these tools in `src/delivery_mcp/mcp/server.py`.
+Register these tools in `src/donegate_mcp/mcp/server.py`.
 
 ### Project tools
 1. `project_init`
@@ -222,22 +222,22 @@ Tool behavior notes:
 - Avoid embedding policy in tool handlers.
 
 ## 7. CLI Hook Surface
-Implement in `src/delivery_mcp/cli/main.py` and expose console script `delivery-mcp`.
+Implement in `src/donegate_mcp/cli/main.py` and expose console script `donegate-mcp`.
 
 Recommended commands:
 
 ```text
-delivery-mcp init --project-name NAME [--data-root .delivery-mcp]
-delivery-mcp task create --title ... --spec-ref ... [--summary ...]
-delivery-mcp task list [--status ...] [--json]
-delivery-mcp task start TASK-ID                     # alias for transition -> in_progress
-delivery-mcp task submit TASK-ID                    # alias for transition -> awaiting_verification
-delivery-mcp task verify TASK-ID --result passed|failed [--ref ...] [--notes ...]
-delivery-mcp task doc-sync TASK-ID --result synced|outdated [--ref ...] [--notes ...]
-delivery-mcp task done TASK-ID                      # attempts transition -> done, emits gate failure reason
-delivery-mcp task block TASK-ID --reason ...
-delivery-mcp task unblock TASK-ID --to ready|in_progress|awaiting_verification
-delivery-mcp dashboard [--json]
+donegate-mcp init --project-name NAME [--data-root .donegate-mcp]
+donegate-mcp task create --title ... --spec-ref ... [--summary ...]
+donegate-mcp task list [--status ...] [--json]
+donegate-mcp task start TASK-ID                     # alias for transition -> in_progress
+donegate-mcp task submit TASK-ID                    # alias for transition -> awaiting_verification
+donegate-mcp task verify TASK-ID --result passed|failed [--ref ...] [--notes ...]
+donegate-mcp task doc-sync TASK-ID --result synced|outdated [--ref ...] [--notes ...]
+donegate-mcp task done TASK-ID                      # attempts transition -> done, emits gate failure reason
+donegate-mcp task block TASK-ID --reason ...
+donegate-mcp task unblock TASK-ID --to ready|in_progress|awaiting_verification
+donegate-mcp dashboard [--json]
 ```
 
 Hook/CI usage guidance:

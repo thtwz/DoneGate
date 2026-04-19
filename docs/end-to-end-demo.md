@@ -13,18 +13,18 @@ This walkthrough shows the full spec-driven loop:
 ## Setup
 
 ```bash
-cd /Users/mac/workspace/projects/delivery-mcp
+cd /path/to/DoneGate-MCP
 mkdir -p /tmp/delivery-demo/docs /tmp/delivery-demo/reports
 printf 'version 1\n' >/tmp/delivery-demo/docs/spec.md
 printf 'plan\n' >/tmp/delivery-demo/docs/plan.md
 printf 'pytest ok\n' >/tmp/delivery-demo/reports/pytest.txt
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp init --project-name demo
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp init --project-name demo
 ```
 
 ## Create a task
 
 ```bash
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp --json task create \
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json task create \
   --title "implement gate" \
   --spec-ref /tmp/delivery-demo/docs/spec.md \
   --verification-mode self-test \
@@ -38,20 +38,20 @@ donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp --json task create \
 
 ```bash
 TASK_ID=TASK-0001
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp task transition $TASK_ID --to ready
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp task start $TASK_ID
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp task submit $TASK_ID
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp --json task self-test $TASK_ID --workdir /tmp/delivery-demo
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp task doc-sync $TASK_ID --result synced --ref /tmp/delivery-demo/docs/plan.md
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp --json task done $TASK_ID
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp task transition $TASK_ID --to ready
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp task start $TASK_ID
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp task submit $TASK_ID
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json task self-test $TASK_ID --workdir /tmp/delivery-demo
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp task doc-sync $TASK_ID --result synced --ref /tmp/delivery-demo/docs/plan.md
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json task done $TASK_ID
 ```
 
 ## Change the spec and detect drift
 
 ```bash
 printf 'version 2\n' >/tmp/delivery-demo/docs/spec.md
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp --json spec refresh --spec-ref /tmp/delivery-demo/docs/spec.md --reason "design updated"
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp --json progress
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json spec refresh --spec-ref /tmp/delivery-demo/docs/spec.md --reason "design updated"
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json progress
 ```
 
 Expected result:
@@ -61,16 +61,16 @@ Expected result:
 ## Record a deviation
 
 ```bash
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp deviation add $TASK_ID \
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp deviation add $TASK_ID \
   --summary "temporary workaround" \
   --details "using compatibility path until final API lands"
-donegate-mcp --data-root /tmp/delivery-demo/.delivery-mcp --json deviation list
+donegate-mcp --data-root /tmp/delivery-demo/.donegate-mcp --json deviation list
 ```
 
 ## Inspect state files
 
 ```bash
-cat /tmp/delivery-demo/.delivery-mcp/plan.json
-cat /tmp/delivery-demo/.delivery-mcp/progress.json
-cat /tmp/delivery-demo/.delivery-mcp/deviations.jsonl
+cat /tmp/delivery-demo/.donegate-mcp/plan.json
+cat /tmp/delivery-demo/.donegate-mcp/progress.json
+cat /tmp/delivery-demo/.donegate-mcp/deviations.jsonl
 ```

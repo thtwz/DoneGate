@@ -30,7 +30,7 @@ A task cannot become `done` unless all of the following are true:
 ## What it includes
 
 - A hook-friendly CLI for local workflows and CI
-- A file-backed state model under `.delivery-mcp/`
+- A file-backed state model under `.donegate-mcp/`
 - MCP tool support for agent orchestration
 - Self-test execution with artifact logging
 - Spec hash tracking and drift detection
@@ -54,14 +54,14 @@ A task cannot become `done` unless all of the following are true:
 - `CONTRIBUTING.md`
 - `LICENSE`
 - `docs/release-checklist.md`
-- `examples/delivery-mcp.env.example`
+- `examples/donegate-mcp.env.example`
 - `examples/hermes-mcp-config.yaml`
 
 ## Installation
 
 ```bash
-git clone <your-repo-url>
-cd delivery-mcp
+git clone https://github.com/thtwz/DoneGate-MCP.git
+cd DoneGate-MCP
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .
@@ -73,14 +73,14 @@ For optional MCP support:
 pip install "mcp>=1.9.0"
 ```
 
-The branded CLI is `donegate-mcp`. The internal Python module path currently remains `delivery_mcp`.
+The CLI and Python module path are both named `donegate_mcp` / `donegate-mcp`.
 
 ## CLI quick start
 
 ```bash
-donegate-mcp --data-root .delivery-mcp init --project-name demo
+donegate-mcp --data-root .donegate-mcp init --project-name demo
 
-donegate-mcp --data-root .delivery-mcp --json task create \
+donegate-mcp --data-root .donegate-mcp --json task create \
   --title "Ship gate" \
   --spec-ref docs/spec.md \
   --verification-mode self-test \
@@ -89,12 +89,12 @@ donegate-mcp --data-root .delivery-mcp --json task create \
   --required-artifact reports/pytest.txt \
   --plan-node-id phase-1-task-a
 
-donegate-mcp --data-root .delivery-mcp task transition TASK-0001 --to ready
-donegate-mcp --data-root .delivery-mcp task start TASK-0001
-donegate-mcp --data-root .delivery-mcp task submit TASK-0001
-donegate-mcp --data-root .delivery-mcp --json task self-test TASK-0001 --workdir .
-donegate-mcp --data-root .delivery-mcp task doc-sync TASK-0001 --result synced --ref docs/plan.md
-donegate-mcp --data-root .delivery-mcp --json task done TASK-0001
+donegate-mcp --data-root .donegate-mcp task transition TASK-0001 --to ready
+donegate-mcp --data-root .donegate-mcp task start TASK-0001
+donegate-mcp --data-root .donegate-mcp task submit TASK-0001
+donegate-mcp --data-root .donegate-mcp --json task self-test TASK-0001 --workdir .
+donegate-mcp --data-root .donegate-mcp task doc-sync TASK-0001 --result synced --ref docs/plan.md
+donegate-mcp --data-root .donegate-mcp --json task done TASK-0001
 ```
 
 ## Typical flow
@@ -109,34 +109,34 @@ donegate-mcp --data-root .delivery-mcp --json task done TASK-0001
 ## Spec drift workflow
 
 ```bash
-donegate-mcp --data-root .delivery-mcp --json spec refresh --spec-ref docs/spec.md --reason "design changed"
-donegate-mcp --data-root .delivery-mcp --json progress
+donegate-mcp --data-root .donegate-mcp --json spec refresh --spec-ref docs/spec.md --reason "design changed"
+donegate-mcp --data-root .donegate-mcp --json progress
 ```
 
 ## Deviation workflow
 
 ```bash
-donegate-mcp --data-root .delivery-mcp deviation add TASK-0001 \
+donegate-mcp --data-root .donegate-mcp deviation add TASK-0001 \
   --summary "temporary workaround" \
   --details "using fallback behavior until API is ready"
 
-donegate-mcp --data-root .delivery-mcp --json deviation list
+donegate-mcp --data-root .donegate-mcp --json deviation list
 ```
 
 ## Hook examples
 
 ```bash
-TASK_ID=TASK-0001 DELIVERY_MCP_ROOT=.delivery-mcp DELIVERY_MCP_WORKDIR=$(pwd) scripts/pre-commit.sh
-TASK_ID=TASK-0001 DELIVERY_MCP_ROOT=.delivery-mcp DELIVERY_MCP_WORKDIR=$(pwd) scripts/pre-push.sh
-TASK_ID=TASK-0001 DELIVERY_MCP_ROOT=.delivery-mcp DOC_REF=docs/plan.md scripts/post-doc-sync.sh synced
-SPEC_REF=docs/spec.md DELIVERY_MCP_ROOT=.delivery-mcp scripts/post-spec-change.sh "design changed"
+TASK_ID=TASK-0001 DONEGATE_MCP_ROOT=.donegate-mcp DONEGATE_MCP_WORKDIR=$(pwd) scripts/pre-commit.sh
+TASK_ID=TASK-0001 DONEGATE_MCP_ROOT=.donegate-mcp DONEGATE_MCP_WORKDIR=$(pwd) scripts/pre-push.sh
+TASK_ID=TASK-0001 DONEGATE_MCP_ROOT=.donegate-mcp DOC_REF=docs/plan.md scripts/post-doc-sync.sh synced
+SPEC_REF=docs/spec.md DONEGATE_MCP_ROOT=.donegate-mcp scripts/post-spec-change.sh "design changed"
 ```
 
 ## State files
 
-- `.delivery-mcp/plan.json`
-- `.delivery-mcp/progress.json`
-- `.delivery-mcp/deviations.jsonl`
+- `.donegate-mcp/plan.json`
+- `.donegate-mcp/progress.json`
+- `.donegate-mcp/deviations.jsonl`
 
 ## Current status
 
@@ -144,7 +144,7 @@ DoneGate MCP is already a working vertical slice. It includes executable self-te
 
 ## Release notes
 
-The initial public release notes live in [docs/release-notes-v0.1.0.md](/Users/mac/workspace/projects/delivery-mcp/docs/release-notes-v0.1.0.md).
+The initial public release notes live in [docs/release-notes-v0.1.0.md](docs/release-notes-v0.1.0.md).
 
 ## Development
 
@@ -156,12 +156,12 @@ PYTHONPATH=src pytest -q
 
 ## Contributing
 
-Contributions are welcome. If you want to propose a feature, tighten the lifecycle rules, improve the MCP surface, or sharpen the docs, start with [CONTRIBUTING.md](/Users/mac/workspace/projects/delivery-mcp/CONTRIBUTING.md).
+Contributions are welcome. If you want to propose a feature, tighten the lifecycle rules, improve the MCP surface, or sharpen the docs, start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Release checklist
 
-Before publishing a new version, walk through [docs/release-checklist.md](/Users/mac/workspace/projects/delivery-mcp/docs/release-checklist.md).
+Before publishing a new version, walk through [docs/release-checklist.md](docs/release-checklist.md).
 
 ## License
 
-DoneGate MCP is licensed under [Apache-2.0](/Users/mac/workspace/projects/delivery-mcp/LICENSE).
+DoneGate MCP is licensed under [Apache-2.0](LICENSE).

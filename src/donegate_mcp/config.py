@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-DATA_DIRNAME = ".delivery-mcp"
+DATA_DIRNAME = ".donegate-mcp"
 PROJECT_FILENAME = "project.json"
 PLAN_FILENAME = "plan.json"
 PROGRESS_FILENAME = "progress.json"

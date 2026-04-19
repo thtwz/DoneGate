@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from delivery_mcp.config import TASKS_DIRNAME
-from delivery_mcp.domain.lifecycle import normalize_task
-from delivery_mcp.models import Task
-from delivery_mcp.storage.fs import atomic_write_json, ensure_dir, read_json
+from donegate_mcp.config import TASKS_DIRNAME
+from donegate_mcp.domain.lifecycle import normalize_task
+from donegate_mcp.models import Task
+from donegate_mcp.storage.fs import atomic_write_json, ensure_dir, read_json
 
 
 class TaskStore:

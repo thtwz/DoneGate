@@ -26,7 +26,7 @@ Initial public release of DoneGate MCP.
 
 - Public brand: `DoneGate MCP`
 - Python package name: `donegate-mcp`
-- Internal module path remains `delivery_mcp` for compatibility in the current codebase
+- Python module path: `donegate_mcp`
 
 ## Validation
 

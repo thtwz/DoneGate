@@ -3,7 +3,7 @@
 ## 1. Local development
 
 ```bash
-cd /Users/mac/workspace/projects/delivery-mcp
+cd /path/to/DoneGate-MCP
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e .
@@ -26,28 +26,28 @@ donegate-mcp --help
 From the target project root:
 
 ```bash
-donegate-mcp --data-root .delivery-mcp init --project-name my-project
+donegate-mcp --data-root .donegate-mcp init --project-name my-project
 ```
 
 ## 3. Recommended hook wiring
 
 ```bash
-cp /Users/mac/workspace/projects/delivery-mcp/scripts/pre-commit.sh .git/hooks/pre-commit
-cp /Users/mac/workspace/projects/delivery-mcp/scripts/pre-push.sh .git/hooks/pre-push
+cp /path/to/DoneGate-MCP/scripts/pre-commit.sh .git/hooks/pre-commit
+cp /path/to/DoneGate-MCP/scripts/pre-push.sh .git/hooks/pre-push
 chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 ```
 
 Then export variables in your shell or CI job:
 
 ```bash
-source /Users/mac/workspace/projects/delivery-mcp/examples/delivery-mcp.env.example
+source /path/to/DoneGate-MCP/examples/donegate-mcp.env.example
 export TASK_ID=TASK-0001
 export SPEC_REF=docs/spec.md
 ```
 
 ## 4. MCP integration
 
-Use `examples/hermes-mcp-config.yaml` as a starting point. In practice, prefer packaging DoneGate MCP into the Python environment that Hermes uses, then point `mcp_servers.delivery_mcp.command` to that interpreter.
+Use `examples/hermes-mcp-config.yaml` as a starting point. In practice, prefer packaging DoneGate MCP into the Python environment that Hermes uses, then point `mcp_servers.donegate_mcp.command` to that interpreter.
 
 ## 5. Operational note
 
@@ -55,4 +55,4 @@ For local adoption, the CLI is the primary stable interface. The MCP adapter is 
 
 ## 6. Naming note
 
-The public project name is `DoneGate MCP`. The internal Python package path remains `delivery_mcp` for compatibility with the current codebase.
+The public project name is `DoneGate MCP`. The CLI and Python module path are `donegate-mcp` and `donegate_mcp`.
