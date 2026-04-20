@@ -26,6 +26,21 @@ def can_transition(current: TaskStatus, target: TaskStatus) -> bool:
     return target in _ALLOWED_TRANSITIONS[current]
 
 
+def _has_work_evidence(task: Task) -> bool:
+    return any(
+        (
+            task.started_at is not None,
+            task.verified_at is not None,
+            task.documented_at is not None,
+            task.last_self_test_at is not None,
+            task.last_verification_ref is not None,
+            task.last_doc_sync_ref is not None,
+            task.verification_status != VerificationStatus.UNKNOWN,
+            task.doc_sync_status != DocSyncStatus.UNKNOWN,
+        )
+    )
+
+
 def project_status(task: Task) -> TaskStatus:
     if task.done_at or task.status == TaskStatus.DONE:
         return TaskStatus.DONE
@@ -33,7 +48,7 @@ def project_status(task: Task) -> TaskStatus:
         return TaskStatus.BLOCKED
     if task.needs_revalidation:
         return TaskStatus.IN_PROGRESS
-    has_started = task.started_at is not None or task.status in {
+    has_started = _has_work_evidence(task) or task.status in {
         TaskStatus.IN_PROGRESS,
         TaskStatus.AWAITING_VERIFICATION,
         TaskStatus.VERIFIED,
@@ -154,6 +169,7 @@ def apply_verification(task: Task, result: VerificationStatus, ref: str | None =
     task.verification_status = result
     task.last_verification_ref = ref
     task.updated_at = timestamp
+    task.started_at = task.started_at or timestamp
     if result == VerificationStatus.PASSED:
         task.verified_at = timestamp
         task.needs_revalidation = False
@@ -169,6 +185,7 @@ def apply_doc_sync(task: Task, result: DocSyncStatus, ref: str | None = None) ->
     task.doc_sync_status = result
     task.last_doc_sync_ref = ref
     task.updated_at = timestamp
+    task.started_at = task.started_at or timestamp
     if result == DocSyncStatus.SYNCED:
         task.documented_at = timestamp
     else:

@@ -91,6 +91,20 @@ def test_transition_to_verified_returns_compatibility_warning(tmp_path) -> None:
     ]
 
 
+def test_verification_fact_marks_ready_task_as_started_and_promotes_status(tmp_path) -> None:
+    root = tmp_path / ".donegate-mcp"
+    service = DoneGateService(root)
+    service.init_project("demo")
+    created = service.create_task("Implicit start", "docs/spec.md")
+    task_id = created["task"]["task_id"]
+
+    service.transition_task(task_id, "ready")
+    verified = service.record_verification(task_id, "passed", ref="reports/pytest.txt")
+
+    assert verified["task"]["started_at"] is not None
+    assert verified["task"]["status"] == "verified"
+
+
 def test_list_tasks_normalizes_stale_persisted_status(tmp_path) -> None:
     root = tmp_path / ".donegate-mcp"
     service = DoneGateService(root)
