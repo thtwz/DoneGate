@@ -134,6 +134,10 @@ If you want to expose DoneGate MCP inside Codex as a local plugin, keep the plug
 
 This keeps Codex-specific wiring separate from the delivery-gate core. The plugin should act as a thin adapter over the existing DoneGate MCP server, not a second implementation of delivery rules.
 
+If Codex runs DoneGate as a shared plugin, prefer launching Codex from a shell that already sourced `.donegate-mcp/env.sh` in the target repository. That file exports `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`, which allow the shared MCP process to default to the supervised repository instead of the plugin checkout.
+
+If the host process cannot inherit that environment, pass `repo_root` explicitly in DoneGate MCP tool calls.
+
 ## 8. Operational note
 
 For local adoption, the CLI is the primary stable interface. The MCP adapter is there for agent orchestration, but hook and CI integration should call the CLI directly.

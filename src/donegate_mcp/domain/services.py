@@ -226,10 +226,11 @@ class DoneGateService:
         )
         codex_content = (
             f"# DoneGate onboarding for {project.project_name}\n\n"
-            f"1. Source `{env_path}` in the shell that launches Codex.\n"
+            f"1. Source `{env_path}` in the shell that launches Codex so shared plugins inherit `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`.\n"
             f"2. Start by checking `donegate-mcp --json onboarding --repo-root . --agent codex`.\n"
-            f"3. If no branch task is active, create or activate one before editing code.\n"
-            f"4. Use `donegate-mcp --json task active --repo-root .` to confirm branch binding.\n"
+            f"3. When calling DoneGate MCP tools from a shared Codex plugin, pass `repo_root` explicitly if the host did not inherit the repo-local environment.\n"
+            f"4. If no branch task is active, create or activate one before editing code.\n"
+            f"5. Use `donegate-mcp --json task active --repo-root .` to confirm branch binding.\n"
         )
         hermes_content = (
             "# Generated Hermes MCP config snippet\n"

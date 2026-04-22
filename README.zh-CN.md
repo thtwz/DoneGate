@@ -170,6 +170,10 @@ Codex 接入建议看：
 - `.donegate-mcp/onboarding/codex.md`
 - `docs/startup-guide.md`
 
+如果 DoneGate 是以“共享插件”的方式被 Codex 启动，最好让 Codex 进程继承 `.donegate-mcp/env.sh` 导出的环境变量。这个文件会提供 `DONEGATE_MCP_ROOT` 和 `DONEGATE_MCP_REPO_ROOT`，这样共享 MCP 会话才能默认指向被纳管的目标仓库，而不是插件安装目录。
+
+如果宿主进程不能继承这些环境变量，MCP 工具调用时就应该显式传 `repo_root`。
+
 ## Supervision 状态
 
 ```bash

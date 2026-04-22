@@ -213,6 +213,10 @@ The repository-local onboarding asset is the preferred source because it is gene
 
 DoneGate MCP can also be exposed to Codex as a local plugin. The plugin layer should stay thin and point at the same MCP server, not reimplement delivery rules.
 
+When Codex launches DoneGate as a shared plugin, make sure the Codex process inherits the repo-local environment from `.donegate-mcp/env.sh`. That file exports `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`, which let shared MCP sessions target the supervised repository instead of the plugin installation checkout.
+
+If the host cannot inherit that environment, MCP calls should pass `repo_root` explicitly.
+
 See:
 - [Startup guide](docs/startup-guide.md)
 - `.donegate-mcp/onboarding/codex.md`
