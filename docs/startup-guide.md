@@ -1,5 +1,7 @@
 # DoneGate MCP startup guide
 
+For project background and the agent-oriented overview, start with [README.md](../README.md). If you prefer Chinese, use [README.zh-CN.md](../README.zh-CN.md).
+
 ## 1. Local development
 
 ```bash

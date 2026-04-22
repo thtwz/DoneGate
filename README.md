@@ -4,99 +4,107 @@
 [![License](https://img.shields.io/github/license/thtwz/DoneGate-MCP)](https://github.com/thtwz/DoneGate-MCP/blob/main/LICENSE)
 [![Package](https://img.shields.io/badge/package-not%20published-lightgrey)](https://github.com/thtwz/DoneGate-MCP/releases)
 
-DoneGate MCP is a lightweight quality gate for AI-assisted software delivery.
+[中文文档 / Chinese README](README.zh-CN.md)
 
-It prevents tasks from being marked done until verification passes, docs are synced, required artifacts exist, and changed specs have been revalidated. It is designed for local-first workflows, git hooks, CI wrappers, and MCP-based agent orchestration.
+DoneGate MCP is a local-first delivery control layer for AI-assisted software work.
 
-## Why it exists
+It gives repositories a stricter definition of done:
+- a task is not done until verification passes
+- documentation sync is recorded
+- required docs and artifacts exist
+- spec drift reopens stale work
+- hooks, CLI flows, and MCP-driven agents all enforce the same rules
 
-AI can produce code quickly, but teams still need a trustworthy definition of done.
+## Project Background
 
-DoneGate MCP adds a small, explicit delivery layer on top of the tools you already use:
-- tasks move through a real lifecycle instead of ad hoc status updates
-- verification and documentation become recorded facts, not assumptions
-- spec changes can reopen previously finished work
-- hooks, CI, and agents can all enforce the same gate
+AI coding tools make it easy to produce changes quickly, but they do not automatically give teams a trustworthy delivery workflow.
 
-## Core rule
+In practice, the same problems keep showing up:
+- code is declared finished before tests or manual verification are complete
+- docs are assumed to be updated but no one records that fact
+- a spec changes after work is marked complete and the repository has no reliable way to reopen that work
+- local hooks, CI checks, and agent tools each invent their own rule set
 
-A task cannot become `done` unless all of the following are true:
-- verification status is `passed`
-- doc sync status is `synced`
-- every configured `required_doc_ref` exists
-- every configured `required_artifact` exists
-- the task is not marked `needs_revalidation`
+DoneGate MCP exists to solve that gap with a lightweight, file-backed control plane that works in local repos first and can be called from CLI, git hooks, CI wrappers, Hermes MCP, or Codex plugin integrations.
 
-## What it includes
+## Goals
+
+DoneGate MCP is designed to:
+- make delivery state explicit instead of conversational
+- keep task lifecycle, verification, doc sync, and spec drift in one shared model
+- let agents use the same gate humans use
+- stay easy to install from a git checkout without requiring a hosted backend
+- support worktree-heavy, branch-heavy agent workflows
+
+DoneGate MCP is intentionally not trying to be:
+- a hosted project management system
+- a multi-user lock manager
+- a PR platform replacement
+- a full background daemon platform
+
+## What You Get
 
 - A hook-friendly CLI for local workflows and CI
 - A file-backed state model under `.donegate-mcp/`
 - MCP tool support for agent orchestration
 - Self-test execution with artifact logging
 - Spec hash tracking and drift detection
-- Deviation logging for intentional temporary exceptions
-- Dashboard, plan, and progress read models
+- Deviation logging for intentional exceptions
+- Dashboard, plan, progress, and supervision read models
+- Branch-scoped active task context
+- Task scope ownership and coverage checks
+- Policy-aware hooks for `pre-commit` and `pre-push`
+- Worktree-safe bootstrap and repo-local onboarding assets
 
-## Who it is for
+## Quick Links
 
-- Teams shipping with AI coding agents
-- Repositories that want a stricter definition of done
-- Local-first workflows that do not want a heavy external control plane
-- Tool builders who want a delivery gate they can call from hooks, CI, or MCP
+- [Startup guide](docs/startup-guide.md)
+- [End-to-end demo](docs/end-to-end-demo.md)
+- [Repository metadata](docs/repository-metadata.md)
+- [Contributing](CONTRIBUTING.md)
+- [Release checklist](docs/release-checklist.md)
+- [Hermes example config](examples/hermes-mcp-config.yaml)
 
-## Quick links
+## Human Quick Start
 
-- `docs/startup-guide.md`
-- `docs/end-to-end-demo.md`
-- `docs/product-notes.md`
-- `docs/release-notes-v0.1.0.md`
-- `docs/repository-metadata.md`
-- `CONTRIBUTING.md`
-- `LICENSE`
-- `docs/release-checklist.md`
-- `examples/donegate-mcp.env.example`
-- `examples/hermes-mcp-config.yaml`
-
-## Installation
+### 1. Install DoneGate MCP
 
 ```bash
 git clone https://github.com/thtwz/DoneGate-MCP.git
 cd DoneGate-MCP
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e .
+pip install -e ".[mcp,test]"
 ```
 
-For optional MCP support:
+After installation:
 
 ```bash
-pip install "mcp>=1.9.0"
+donegate-mcp --help
 ```
 
-The CLI and Python module path are both named `donegate_mcp` / `donegate-mcp`.
+### 2. Bootstrap a target repository
 
-## Bootstrap a repository
-
-The preferred v0.3 setup path is a single bootstrap command from the target repository root:
+From the repository you want DoneGate to supervise:
 
 ```bash
 donegate-mcp bootstrap --project-name my-project --repo-root .
 ```
 
-This initializes `.donegate-mcp/` for the repository, installs managed `pre-commit` and `pre-push` hooks into the correct git hooks directory, and generates repo-local onboarding assets. If an existing hook is not already managed by DoneGate MCP, bootstrap leaves it in place and reports it as skipped instead of overwriting it.
+This does four important things:
+- initializes `.donegate-mcp`
+- installs managed `pre-commit` and `pre-push` hooks
+- resolves the correct git hooks path even in linked worktrees
+- generates repo-local onboarding assets
 
-Bootstrap now also writes:
+Bootstrap writes:
 - `.donegate-mcp/env.sh`
 - `.donegate-mcp/onboarding/codex.md`
 - `.donegate-mcp/onboarding/hermes-mcp.yaml`
 
-That same path works for linked git worktrees because DoneGate now resolves hooks through `git rev-parse --git-path hooks` instead of assuming `.git/hooks` is a real directory.
-
-## CLI quick start
+### 3. Create and activate a task
 
 ```bash
-donegate-mcp --data-root .donegate-mcp init --project-name demo
-
 donegate-mcp --data-root .donegate-mcp --json task create \
   --title "Ship gate" \
   --spec-ref docs/spec.md \
@@ -106,7 +114,13 @@ donegate-mcp --data-root .donegate-mcp --json task create \
   --required-artifact reports/pytest.txt \
   --plan-node-id phase-1-task-a
 
-donegate-mcp --data-root .donegate-mcp task transition TASK-0001 --to ready
+donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
+donegate-mcp --data-root .donegate-mcp --json task active --repo-root .
+```
+
+### 4. Use the gate during implementation
+
+```bash
 donegate-mcp --data-root .donegate-mcp task start TASK-0001
 donegate-mcp --data-root .donegate-mcp task submit TASK-0001
 donegate-mcp --data-root .donegate-mcp --json task self-test TASK-0001 --workdir .
@@ -114,125 +128,154 @@ donegate-mcp --data-root .donegate-mcp task doc-sync TASK-0001 --result synced -
 donegate-mcp --data-root .donegate-mcp --json task done TASK-0001
 ```
 
-## Typical flow
+## LLM / Agent Quickstart From Git URL
 
-1. Create a task from a spec or ticket.
-2. Start work and submit it for verification.
-3. Record verification or run the configured self-test.
-4. Record documentation sync.
-5. Close the task only when the gate passes.
-6. Refresh spec hashes when requirements change and revalidate stale work.
-
-## Spec drift workflow
+If you give an LLM only this repository URL, the intended zero-context bootstrap path is:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json spec refresh --spec-ref docs/spec.md --reason "design changed"
-donegate-mcp --data-root .donegate-mcp --json progress
+git clone https://github.com/thtwz/DoneGate-MCP.git
+cd DoneGate-MCP
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e ".[mcp,test]"
 ```
 
-## Deviation workflow
+Then, in the target repository the model should supervise:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp deviation add TASK-0001 \
-  --summary "temporary workaround" \
-  --details "using fallback behavior until API is ready"
-
-donegate-mcp --data-root .donegate-mcp --json deviation list
-```
-
-## Hook examples
-
-```bash
-TASK_ID=TASK-0001 DONEGATE_MCP_ROOT=.donegate-mcp DONEGATE_MCP_WORKDIR=$(pwd) scripts/pre-commit.sh
-TASK_ID=TASK-0001 DONEGATE_MCP_ROOT=.donegate-mcp DONEGATE_MCP_WORKDIR=$(pwd) scripts/pre-push.sh
-TASK_ID=TASK-0001 DONEGATE_MCP_ROOT=.donegate-mcp DOC_REF=docs/plan.md scripts/post-doc-sync.sh synced
-SPEC_REF=docs/spec.md DONEGATE_MCP_ROOT=.donegate-mcp scripts/post-spec-change.sh "design changed"
-```
-
-For new repositories, prefer `donegate-mcp bootstrap` before wiring any additional environment variables by hand.
-
-## Onboarding guidance
-
-To get branch-aware onboarding help after bootstrap:
-
-```bash
+donegate-mcp bootstrap --project-name my-project --repo-root .
+source .donegate-mcp/env.sh
 donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent codex
-donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent hermes
 ```
 
-The onboarding payload includes:
-- current branch and worktree name
-- the active task for that branch, if one exists
-- the generated repo-local onboarding files
-- the next recommended DoneGate command when a task still needs to be created or activated
-
-## Active task context
-
-v0.2 also introduces a small repo-local active task context:
+If no active task exists yet, the model should:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp task activate TASK-0001
-donegate-mcp --data-root .donegate-mcp --json task active
-donegate-mcp --data-root .donegate-mcp task clear-active
+donegate-mcp --data-root .donegate-mcp --json task list --limit 10
+donegate-mcp --data-root .donegate-mcp --json task create \
+  --title "Describe the current work" \
+  --spec-ref docs/spec.md
+donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
 ```
 
-The bundled `pre-commit` and `pre-push` hooks now fall back to this active task when `TASK_ID` is not explicitly set.
+From there, the model has enough information to use all major surfaces:
+- CLI commands through `donegate-mcp`
+- local hooks through the files installed by `bootstrap`
+- supervision and onboarding through `--json supervision` and `--json onboarding`
+- Hermes MCP through `.donegate-mcp/onboarding/hermes-mcp.yaml`
+- Codex integration through `.donegate-mcp/onboarding/codex.md` and the plugin setup in the startup guide
 
-When you activate from a git repository, DoneGate now binds the active task to the current branch as well as the global fallback slot:
+### LLM Operating Contract
+
+An LLM integrating DoneGate MCP should follow this sequence:
+
+1. Clone and install DoneGate MCP from this repository.
+2. Run `donegate-mcp bootstrap --project-name ... --repo-root .` inside the target repository.
+3. Read `donegate-mcp --json onboarding --repo-root . --agent <codex|hermes>`.
+4. Ensure a branch-scoped active task exists before editing code.
+5. Use `donegate-mcp --json supervision --repo-root .` before commits or pushes.
+6. Record verification and doc sync before calling a task done.
+
+## Integrations
+
+### CLI
+
+The CLI is the primary stable interface for local adoption and CI wrappers.
+
+Useful read commands:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks --limit 20
+donegate-mcp --data-root .donegate-mcp --json progress
+donegate-mcp --data-root .donegate-mcp --json plan
+donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
+donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent codex
+```
+
+### Hooks
+
+Managed hooks use the same supervision model as the CLI.
+
+Current policy behavior:
+- `pre-commit` blocks on `needs_task`, `task_mismatch`, and `needs_revalidation`
+- `pre-commit` warns on `stale_verification` and `stale_docs`
+- `pre-push` blocks on any status stronger than `tracked`
+
+### Hermes MCP
+
+Use the generated onboarding asset or the example config:
+- `.donegate-mcp/onboarding/hermes-mcp.yaml`
+- `examples/hermes-mcp-config.yaml`
+
+The repository-local onboarding asset is the preferred source because it is generated with the correct local interpreter and `data_root`.
+
+### Codex Plugin
+
+DoneGate MCP can also be exposed to Codex as a local plugin. The plugin layer should stay thin and point at the same MCP server, not reimplement delivery rules.
+
+See:
+- [Startup guide](docs/startup-guide.md)
+- `.donegate-mcp/onboarding/codex.md`
+
+## Active Task Context
+
+DoneGate stores a repo-local active task context and, when `--repo-root` points to a git repository, binds tasks to the current branch.
 
 ```bash
 donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
 donegate-mcp --data-root .donegate-mcp --json task active --repo-root .
+donegate-mcp --data-root .donegate-mcp task clear-active --repo-root .
 ```
 
-This lets different branches resolve different active tasks while still keeping a simple default for non-git contexts.
+This makes branch-heavy agent workflows much safer in worktrees and parallel sessions.
 
-## Supervision reporting
-
-To check whether the repository currently has work that is not tied to an active task:
+## Supervision States
 
 ```bash
 donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
 ```
 
-The v0.3 supervision read model reports:
-- `clean` when the working tree has no relevant changes
-- `needs_task` when files changed but no active task is set
-- `task_mismatch` when files changed outside the active task scope
-- `needs_revalidation` when the active task has spec drift
-- `stale_verification` when the diff is covered but verification has not caught up
-- `stale_docs` when verification passed but documentation sync is still behind
-- `tracked` when changes are covered and no stronger warning applies
+The supervision read model can report:
+- `clean`
+- `needs_task`
+- `task_mismatch`
+- `needs_revalidation`
+- `stale_verification`
+- `stale_docs`
+- `tracked`
 
-Supervision reads branch-scoped active context when `--repo-root` is provided.
-Tasks can also declare repo-owned scopes:
+When task scopes are configured, supervision also returns:
+- `covered_files`
+- `uncovered_files`
+- `policy.pre_commit`
+- `policy.pre_push`
 
-```bash
-donegate-mcp --data-root .donegate-mcp --json task create \
-  --title "task scope example" \
-  --spec-ref docs/spec.md \
-  --owned-path src/donegate_mcp \
-  --owned-path tests
-```
+## Files And State
 
-When scopes are present, supervision also reports:
-- `covered_files` for changes the active task owns
-- `uncovered_files` for changes that need a different task or a wider scope
-- `policy.pre_commit` and `policy.pre_push` guidance that managed hooks use before running self-tests
+DoneGate stores repo-local state under `.donegate-mcp/`, including:
+- `project.json`
+- `plan.json`
+- `progress.json`
+- `session.json`
+- `supervision.json`
+- `deviations.jsonl`
+- `tasks/`
+- `events/`
+- `artifacts/`
+- `onboarding/`
 
-## State files
+## Recommended Reading Order
 
-- `.donegate-mcp/plan.json`
-- `.donegate-mcp/progress.json`
-- `.donegate-mcp/deviations.jsonl`
+For humans:
+1. This README
+2. [Startup guide](docs/startup-guide.md)
+3. [End-to-end demo](docs/end-to-end-demo.md)
 
-## Current status
-
-DoneGate MCP is already a working vertical slice. It includes executable self-test gates, artifact and doc validation, lifecycle projection, spec drift detection, deviation logging, and enough docs/examples to wire into a real repository today.
-
-## Release notes
-
-The initial public release notes live in [docs/release-notes-v0.1.0.md](docs/release-notes-v0.1.0.md).
+For LLMs and agent systems:
+1. This README
+2. `donegate-mcp --json onboarding --repo-root . --agent codex`
+3. [Startup guide](docs/startup-guide.md)
+4. `.donegate-mcp/onboarding/codex.md` or `.donegate-mcp/onboarding/hermes-mcp.yaml`
 
 ## Development
 
@@ -241,14 +284,6 @@ Run the test suite with:
 ```bash
 PYTHONPATH=src pytest -q
 ```
-
-## Contributing
-
-Contributions are welcome. If you want to propose a feature, tighten the lifecycle rules, improve the MCP surface, or sharpen the docs, start with [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Release checklist
-
-Before publishing a new version, walk through [docs/release-checklist.md](docs/release-checklist.md).
 
 ## License
 
