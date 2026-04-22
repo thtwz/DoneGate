@@ -43,8 +43,8 @@ class DoneGateMcpApp:
             return self._safe(self.service.dashboard, include_tasks=include_tasks, limit=limit)
 
         @server.tool("task_create")
-        def task_create(title: str, spec_ref: str, summary: str = "", verification_mode: str = "manual", test_commands: list[str] | None = None, required_doc_refs: list[str] | None = None, required_artifacts: list[str] | None = None, plan_node_id: str | None = None) -> dict[str, Any]:
-            return self._safe(self.service.create_task, title, spec_ref, summary=summary, verification_mode=verification_mode, test_commands=test_commands, required_doc_refs=required_doc_refs, required_artifacts=required_artifacts, plan_node_id=plan_node_id)
+        def task_create(title: str, spec_ref: str, summary: str = "", verification_mode: str = "manual", test_commands: list[str] | None = None, required_doc_refs: list[str] | None = None, required_artifacts: list[str] | None = None, owned_paths: list[str] | None = None, plan_node_id: str | None = None) -> dict[str, Any]:
+            return self._safe(self.service.create_task, title, spec_ref, summary=summary, verification_mode=verification_mode, test_commands=test_commands, required_doc_refs=required_doc_refs, required_artifacts=required_artifacts, owned_paths=owned_paths, plan_node_id=plan_node_id)
 
         @server.tool("task_list")
         def task_list(status: str | None = None, limit: int | None = None) -> dict[str, Any]:
@@ -63,8 +63,8 @@ class DoneGateMcpApp:
             return self._safe(self.service.record_doc_sync, task_id, result, ref=ref, notes=notes)
 
         @server.tool("task_update_acceptance_protocol")
-        def task_update_acceptance_protocol(task_id: str, verification_mode: str | None = None, test_commands: list[str] | None = None, required_doc_refs: list[str] | None = None, required_artifacts: list[str] | None = None, plan_node_id: str | None = None) -> dict[str, Any]:
-            return self._safe(self.service.update_acceptance_protocol, task_id, verification_mode=verification_mode, test_commands=test_commands, required_doc_refs=required_doc_refs, required_artifacts=required_artifacts, plan_node_id=plan_node_id)
+        def task_update_acceptance_protocol(task_id: str, verification_mode: str | None = None, test_commands: list[str] | None = None, required_doc_refs: list[str] | None = None, required_artifacts: list[str] | None = None, owned_paths: list[str] | None = None, plan_node_id: str | None = None) -> dict[str, Any]:
+            return self._safe(self.service.update_acceptance_protocol, task_id, verification_mode=verification_mode, test_commands=test_commands, required_doc_refs=required_doc_refs, required_artifacts=required_artifacts, owned_paths=owned_paths, plan_node_id=plan_node_id)
 
         @server.tool("task_run_self_test")
         def task_run_self_test(task_id: str, workdir: str | None = None) -> dict[str, Any]:

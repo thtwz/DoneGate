@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 
 from donegate_mcp.domain.services import DoneGateService
 
@@ -26,8 +27,11 @@ def test_init_and_create_task_persists_files(tmp_path) -> None:
 
 def test_bootstrap_repository_initializes_state_and_skips_unmanaged_hooks(tmp_path) -> None:
     repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
     hooks = repo / ".git" / "hooks"
-    hooks.mkdir(parents=True)
     custom_hook = hooks / "pre-commit"
     custom_hook.write_text("#!/bin/sh\necho custom\n", encoding="utf-8")
 
@@ -39,6 +43,37 @@ def test_bootstrap_repository_initializes_state_and_skips_unmanaged_hooks(tmp_pa
     assert bootstrapped["hooks"]["skipped"] == ["pre-commit"]
     assert custom_hook.read_text(encoding="utf-8") == "#!/bin/sh\necho custom\n"
     assert (hooks / "pre-push").exists()
+
+
+def test_bootstrap_repository_supports_git_worktree_and_generates_onboarding_assets(tmp_path) -> None:
+    main_repo = tmp_path / "main-repo"
+    worktree_repo = tmp_path / "feature-repo"
+    main_repo.mkdir()
+    subprocess.run(["git", "init"], cwd=main_repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=main_repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=main_repo, check=True, capture_output=True, text=True)
+    (main_repo / "tracked.txt").write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=main_repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=main_repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "worktree", "add", "-b", "feature/demo", str(worktree_repo)], cwd=main_repo, check=True, capture_output=True, text=True)
+
+    service = DoneGateService(worktree_repo / ".donegate-mcp")
+    bootstrapped = service.bootstrap_repository("demo", repo_root=worktree_repo)
+    hooks_dir = Path(
+        subprocess.run(
+            ["git", "-C", str(worktree_repo), "rev-parse", "--git-path", "hooks"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
+
+    assert bootstrapped["hooks"]["installed"] == ["pre-commit", "pre-push"]
+    assert (hooks_dir / "pre-commit").exists()
+    assert (hooks_dir / "pre-push").exists()
+    assert (worktree_repo / ".donegate-mcp" / "env.sh").exists()
+    assert (worktree_repo / ".donegate-mcp" / "onboarding" / "codex.md").exists()
+    assert (worktree_repo / ".donegate-mcp" / "onboarding" / "hermes-mcp.yaml").exists()
 
 
 def test_active_task_context_round_trip(tmp_path) -> None:
@@ -86,8 +121,212 @@ def test_supervision_reports_untracked_work_and_active_task_coverage(tmp_path) -
     task_id = created["task"]["task_id"]
     service.activate_task(task_id)
     covered = service.get_supervision(repo_root=repo)
-    assert covered["supervision"]["status"] == "tracked"
+    assert covered["supervision"]["status"] == "stale_verification"
     assert covered["supervision"]["active_task"]["task_id"] == task_id
+
+
+def test_branch_scoped_active_task_prefers_current_branch(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.init_project("demo", repo_root=str(repo))
+    task_main = service.create_task("main task", "docs/spec-main.md")["task"]["task_id"]
+    service.activate_task(task_main, repo_root=repo)
+
+    subprocess.run(["git", "checkout", "-b", "feature/demo"], cwd=repo, check=True, capture_output=True, text=True)
+    task_feature = service.create_task("feature task", "docs/spec-feature.md")["task"]["task_id"]
+    service.activate_task(task_feature, repo_root=repo)
+
+    feature_active = service.get_active_task(repo_root=repo)
+    assert feature_active["active_task"]["task_id"] == task_feature
+
+    subprocess.run(["git", "checkout", "-"], cwd=repo, check=True, capture_output=True, text=True)
+    main_active = service.get_active_task(repo_root=repo)
+    assert main_active["active_task"]["task_id"] == task_main
+
+
+def test_repo_root_relative_paths_are_normalized_for_task_creation(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    reports = repo / "reports"
+    docs.mkdir(parents=True)
+    reports.mkdir(parents=True)
+    (docs / "spec.md").write_text("v1\n", encoding="utf-8")
+    (docs / "plan.md").write_text("ok\n", encoding="utf-8")
+    (reports / "pytest.txt").write_text("ok\n", encoding="utf-8")
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.init_project("demo", repo_root=str(repo))
+    created = service.create_task(
+        "Gate task",
+        "docs/spec.md",
+        required_doc_refs=["docs/plan.md"],
+        required_artifacts=["reports/pytest.txt"],
+    )
+
+    task = created["task"]
+    assert task["spec_ref"] == str((repo / "docs" / "spec.md").resolve())
+    assert task["required_doc_refs"] == [str((repo / "docs" / "plan.md").resolve())]
+    assert task["required_artifacts"] == [str((repo / "reports" / "pytest.txt").resolve())]
+
+
+def test_task_scope_normalizes_to_repo_relative_owned_paths(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    (repo / "src" / "donegate_mcp").mkdir(parents=True)
+    (repo / "tests").mkdir(parents=True)
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.init_project("demo", repo_root=str(repo))
+    created = service.create_task(
+        "Scoped task",
+        "docs/spec.md",
+        owned_paths=["./src/donegate_mcp", str((repo / "tests").resolve())],
+    )
+
+    assert created["task"]["owned_paths"] == ["src/donegate_mcp", "tests"]
+
+
+def test_supervision_reports_task_mismatch_for_uncovered_changed_files(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    src = repo / "src"
+    tests_dir = repo / "tests"
+    repo.mkdir()
+    src.mkdir()
+    tests_dir.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    (src / "tracked.py").write_text("print('v1')\n", encoding="utf-8")
+    (tests_dir / "test_tracked.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "src/tracked.py", "tests/test_tracked.py"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.init_project("demo", repo_root=str(repo))
+    created = service.create_task("Scoped task", "docs/spec.md", owned_paths=["src"])
+    task_id = created["task"]["task_id"]
+    service.activate_task(task_id, repo_root=repo)
+
+    (src / "tracked.py").write_text("print('v2')\n", encoding="utf-8")
+    (tests_dir / "test_tracked.py").write_text("def test_ok():\n    assert False\n", encoding="utf-8")
+
+    reported = service.get_supervision(repo_root=repo)
+
+    assert reported["supervision"]["status"] == "task_mismatch"
+    assert reported["supervision"]["covered_files"] == ["src/tracked.py"]
+    assert reported["supervision"]["uncovered_files"] == ["tests/test_tracked.py"]
+    assert reported["supervision"]["active_task"]["owned_paths"] == ["src"]
+
+
+def test_supervision_reports_needs_revalidation_for_active_task_with_spec_drift(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    repo.mkdir()
+    docs.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    spec = docs / "spec.md"
+    spec.write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "docs/spec.md"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.init_project("demo", repo_root=str(repo))
+    task_id = service.create_task("Scoped task", "docs/spec.md")["task"]["task_id"]
+    service.activate_task(task_id, repo_root=repo)
+
+    spec.write_text("v2\n", encoding="utf-8")
+    service.refresh_spec("docs/spec.md", reason="spec updated")
+
+    reported = service.get_supervision(repo_root=repo)
+
+    assert reported["supervision"]["status"] == "needs_revalidation"
+    assert reported["supervision"]["policy"]["pre_commit"]["action"] == "block"
+    assert reported["supervision"]["policy"]["pre_push"]["action"] == "block"
+
+
+def test_supervision_reports_stale_verification_for_covered_changed_files(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    src = repo / "src"
+    repo.mkdir()
+    src.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    tracked = src / "tracked.py"
+    tracked.write_text("print('v1')\n", encoding="utf-8")
+    subprocess.run(["git", "add", "src/tracked.py"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.init_project("demo", repo_root=str(repo))
+    task_id = service.create_task("Scoped task", "docs/spec.md", owned_paths=["src"])["task"]["task_id"]
+    service.activate_task(task_id, repo_root=repo)
+
+    tracked.write_text("print('v2')\n", encoding="utf-8")
+
+    reported = service.get_supervision(repo_root=repo)
+
+    assert reported["supervision"]["status"] == "stale_verification"
+    assert reported["supervision"]["policy"]["pre_commit"]["action"] == "warn"
+    assert reported["supervision"]["policy"]["pre_push"]["action"] == "block"
+
+
+def test_supervision_reports_stale_docs_for_verified_active_task(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.init_project("demo", repo_root=str(repo))
+    task_id = service.create_task("Scoped task", "docs/spec.md")["task"]["task_id"]
+    service.activate_task(task_id, repo_root=repo)
+    service.record_verification(task_id, "passed", ref="reports/pytest.txt")
+
+    reported = service.get_supervision(repo_root=repo)
+
+    assert reported["supervision"]["status"] == "stale_docs"
+    assert reported["supervision"]["policy"]["pre_commit"]["action"] == "warn"
+    assert reported["supervision"]["policy"]["pre_push"]["action"] == "block"
+
+
+def test_onboarding_reports_branch_active_task_and_repo_assets(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    (repo / "tracked.txt").write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    service = DoneGateService(repo / ".donegate-mcp")
+    service.bootstrap_repository("demo", repo_root=repo)
+    task_id = service.create_task("Gate task", "docs/spec.md")["task"]["task_id"]
+    service.activate_task(task_id, repo_root=repo)
+
+    payload = service.get_onboarding(agent="codex", repo_root=repo)
+
+    assert payload["onboarding"]["branch"] == "master" or payload["onboarding"]["branch"] == "main"
+    assert payload["onboarding"]["active_task"]["task_id"] == task_id
+    assert payload["onboarding"]["files"]["env"] == str((repo / ".donegate-mcp" / "env.sh").resolve())
+    assert payload["onboarding"]["files"]["codex"] == str((repo / ".donegate-mcp" / "onboarding" / "codex.md").resolve())
+    assert "task active --repo-root" in payload["onboarding"]["recommended_next_step"]
 
 
 def test_service_gate_flow(tmp_path) -> None:

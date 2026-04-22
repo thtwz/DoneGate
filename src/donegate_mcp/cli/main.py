@@ -29,9 +29,14 @@ def build_parser() -> argparse.ArgumentParser:
     supervision_p = sub.add_parser("supervision")
     supervision_p.add_argument("--repo-root", default=".")
 
+    onboarding_p = sub.add_parser("onboarding")
+    onboarding_p.add_argument("--repo-root", default=".")
+    onboarding_p.add_argument("--agent", choices=["codex", "hermes"], default="codex")
+
     init_p = sub.add_parser("init")
     init_p.add_argument("--project-name", required=True)
     init_p.add_argument("--default-branch")
+    init_p.add_argument("--repo-root")
 
     dash_p = sub.add_parser("dashboard")
     dash_p.add_argument("--include-tasks", action="store_true")
@@ -66,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--test-command", action="append", dest="test_commands", default=[])
     create.add_argument("--required-doc-ref", action="append", dest="required_doc_refs", default=[])
     create.add_argument("--required-artifact", action="append", dest="required_artifacts", default=[])
+    create.add_argument("--owned-path", action="append", dest="owned_paths", default=[])
     create.add_argument("--plan-node-id")
 
     list_p = task_sub.add_parser("list")
@@ -74,9 +80,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     activate = task_sub.add_parser("activate")
     activate.add_argument("task_id")
+    activate.add_argument("--repo-root")
 
-    task_sub.add_parser("active")
-    task_sub.add_parser("clear-active")
+    active = task_sub.add_parser("active")
+    active.add_argument("--repo-root")
+
+    clear_active = task_sub.add_parser("clear-active")
+    clear_active.add_argument("--repo-root")
 
     for name in ["start", "submit", "done"]:
         p = task_sub.add_parser(name)
@@ -106,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     protocol.add_argument("--test-commands")
     protocol.add_argument("--required-doc-refs")
     protocol.add_argument("--required-artifacts")
+    protocol.add_argument("--owned-paths")
     protocol.add_argument("--plan-node-id")
 
     self_test = task_sub.add_parser("self-test")
@@ -129,10 +140,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "bootstrap":
             payload = service.bootstrap_repository(args.project_name, repo_root=args.repo_root, default_branch=args.default_branch)
+        elif args.command == "onboarding":
+            payload = service.get_onboarding(agent=args.agent, repo_root=args.repo_root)
         elif args.command == "supervision":
             payload = service.get_supervision(repo_root=args.repo_root)
         elif args.command == "init":
-            payload = service.init_project(args.project_name, default_branch=args.default_branch)
+            payload = service.init_project(args.project_name, default_branch=args.default_branch, repo_root=args.repo_root)
         elif args.command == "dashboard":
             payload = service.dashboard(include_tasks=args.include_tasks, limit=args.limit)
         elif args.command == "plan":
@@ -170,15 +183,15 @@ def _resolve_service_root(args: argparse.Namespace) -> str | None:
 def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dict:
     cmd = args.task_command
     if cmd == "create":
-        return service.create_task(args.title, args.spec_ref, summary=args.summary, verification_mode=args.verification_mode, test_commands=args.test_commands, required_doc_refs=args.required_doc_refs, required_artifacts=args.required_artifacts, plan_node_id=args.plan_node_id)
+        return service.create_task(args.title, args.spec_ref, summary=args.summary, verification_mode=args.verification_mode, test_commands=args.test_commands, required_doc_refs=args.required_doc_refs, required_artifacts=args.required_artifacts, owned_paths=args.owned_paths, plan_node_id=args.plan_node_id)
     if cmd == "list":
         return service.list_tasks(status=args.status, limit=args.limit)
     if cmd == "activate":
-        return service.activate_task(args.task_id)
+        return service.activate_task(args.task_id, repo_root=args.repo_root)
     if cmd == "active":
-        return service.get_active_task()
+        return service.get_active_task(repo_root=args.repo_root)
     if cmd == "clear-active":
-        return service.clear_active_task()
+        return service.clear_active_task(repo_root=args.repo_root)
     if cmd == "start":
         return service.transition_task(args.task_id, "in_progress")
     if cmd == "submit":
@@ -190,7 +203,7 @@ def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dic
     if cmd == "doc-sync":
         return service.record_doc_sync(args.task_id, args.result, ref=args.ref, notes=args.notes)
     if cmd == "protocol":
-        return service.update_acceptance_protocol(args.task_id, verification_mode=args.verification_mode, test_commands=_csv_list(args.test_commands), required_doc_refs=_csv_list(args.required_doc_refs), required_artifacts=_csv_list(args.required_artifacts), plan_node_id=args.plan_node_id)
+        return service.update_acceptance_protocol(args.task_id, verification_mode=args.verification_mode, test_commands=_csv_list(args.test_commands), required_doc_refs=_csv_list(args.required_doc_refs), required_artifacts=_csv_list(args.required_artifacts), owned_paths=_csv_list(args.owned_paths), plan_node_id=args.plan_node_id)
     if cmd == "self-test":
         return service.run_self_test(args.task_id, workdir=args.workdir)
     if cmd == "done":

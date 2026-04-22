@@ -18,6 +18,10 @@ def render(payload: dict[str, Any], as_json: bool) -> str:
     if "supervision" in payload:
         supervision = payload["supervision"]
         return f"{supervision['status']}: {len(supervision['changed_files'])} changed files"
+    if "onboarding" in payload:
+        onboarding = payload["onboarding"]
+        branch = onboarding.get("branch") or "detached"
+        return f"{onboarding['agent']} onboarding for {branch}"
     if "tasks" in payload:
         return "\n".join(f"{task['task_id']} {task['status']} {task['title']}" for task in payload["tasks"]) or "no tasks"
     if "project" in payload:

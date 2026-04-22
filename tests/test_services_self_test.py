@@ -122,3 +122,96 @@ def test_pre_commit_hook_uses_active_task_when_task_id_missing(tmp_path) -> None
 
     assert completed.returncode == 0
     assert '"verification_status": "passed"' in completed.stdout
+
+
+def test_pre_commit_hook_blocks_when_supervision_reports_task_mismatch(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    src = repo / "src"
+    tests_dir = repo / "tests"
+    src.mkdir()
+    tests_dir.mkdir()
+    (src / "tracked.py").write_text("print('v1')\n", encoding="utf-8")
+    (tests_dir / "test_tracked.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    subprocess.run(["git", "add", "src/tracked.py", "tests/test_tracked.py"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    root = repo / ".donegate-mcp"
+    service = DoneGateService(root)
+    service.init_project("demo", repo_root=str(repo))
+    task_id = service.create_task(
+        "Gate task",
+        "docs/spec.md",
+        verification_mode="self-test",
+        test_commands=["python3 -c 'print(123)'"],
+        owned_paths=["src"],
+    )["task"]["task_id"]
+    service.activate_task(task_id, repo_root=repo)
+    (tests_dir / "test_tracked.py").write_text("def test_ok():\n    assert False\n", encoding="utf-8")
+
+    env = dict(os.environ)
+    env["DONEGATE_MCP_ROOT"] = str(root)
+    env["DONEGATE_MCP_WORKDIR"] = str(repo)
+    env["DONEGATE_MCP_REPO_ROOT"] = str(repo)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    env.pop("TASK_ID", None)
+
+    hook = Path(__file__).resolve().parents[1] / "scripts" / "pre-commit.sh"
+    completed = subprocess.run(
+        [str(hook)],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "task_mismatch" in completed.stderr
+
+
+def test_pre_push_hook_blocks_when_supervision_reports_stale_docs(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Test User"], cwd=repo, check=True, capture_output=True, text=True)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("v1\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True, text=True)
+
+    root = repo / ".donegate-mcp"
+    service = DoneGateService(root)
+    service.init_project("demo", repo_root=str(repo))
+    task_id = service.create_task(
+        "Gate task",
+        "docs/spec.md",
+        verification_mode="self-test",
+        test_commands=["python3 -c 'print(123)'"],
+    )["task"]["task_id"]
+    service.activate_task(task_id, repo_root=repo)
+    service.record_verification(task_id, "passed", ref="reports/pytest.txt")
+
+    env = dict(os.environ)
+    env["DONEGATE_MCP_ROOT"] = str(root)
+    env["DONEGATE_MCP_WORKDIR"] = str(repo)
+    env["DONEGATE_MCP_REPO_ROOT"] = str(repo)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "src")
+    env.pop("TASK_ID", None)
+
+    hook = Path(__file__).resolve().parents[1] / "scripts" / "pre-push.sh"
+    completed = subprocess.run(
+        [str(hook)],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert "stale_docs" in completed.stderr

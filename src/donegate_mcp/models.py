@@ -41,6 +41,7 @@ class ProjectState:
     created_at: str
     updated_at: str
     default_branch: str | None = None
+    repo_root: str | None = None
     task_counter: int = 0
 
     def to_dict(self) -> dict[str, Any]:
@@ -48,7 +49,9 @@ class ProjectState:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ProjectState":
-        return cls(**data)
+        payload = dict(data)
+        payload.setdefault("repo_root", None)
+        return cls(**payload)
 
 
 @dataclass(slots=True)
@@ -73,6 +76,7 @@ class Task:
     test_commands: list[str] = field(default_factory=list)
     required_doc_refs: list[str] = field(default_factory=list)
     required_artifacts: list[str] = field(default_factory=list)
+    owned_paths: list[str] = field(default_factory=list)
     last_self_test_at: str | None = None
     last_self_test_exit_code: int | None = None
     last_self_test_ref: str | None = None
@@ -101,6 +105,7 @@ class Task:
         payload.setdefault("test_commands", [])
         payload.setdefault("required_doc_refs", [])
         payload.setdefault("required_artifacts", [])
+        payload.setdefault("owned_paths", [])
         payload.setdefault("last_self_test_at", None)
         payload.setdefault("last_self_test_exit_code", None)
         payload.setdefault("last_self_test_ref", None)

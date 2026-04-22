@@ -77,13 +77,20 @@ The CLI and Python module path are both named `donegate_mcp` / `donegate-mcp`.
 
 ## Bootstrap a repository
 
-The preferred v0.2 setup path is a single bootstrap command from the target repository root:
+The preferred v0.3 setup path is a single bootstrap command from the target repository root:
 
 ```bash
 donegate-mcp bootstrap --project-name my-project --repo-root .
 ```
 
-This initializes `.donegate-mcp/` for the repository and installs managed `pre-commit` and `pre-push` hooks into `.git/hooks/`. If an existing hook is not already managed by DoneGate MCP, bootstrap leaves it in place and reports it as skipped instead of overwriting it.
+This initializes `.donegate-mcp/` for the repository, installs managed `pre-commit` and `pre-push` hooks into the correct git hooks directory, and generates repo-local onboarding assets. If an existing hook is not already managed by DoneGate MCP, bootstrap leaves it in place and reports it as skipped instead of overwriting it.
+
+Bootstrap now also writes:
+- `.donegate-mcp/env.sh`
+- `.donegate-mcp/onboarding/codex.md`
+- `.donegate-mcp/onboarding/hermes-mcp.yaml`
+
+That same path works for linked git worktrees because DoneGate now resolves hooks through `git rev-parse --git-path hooks` instead of assuming `.git/hooks` is a real directory.
 
 ## CLI quick start
 
@@ -144,6 +151,21 @@ SPEC_REF=docs/spec.md DONEGATE_MCP_ROOT=.donegate-mcp scripts/post-spec-change.s
 
 For new repositories, prefer `donegate-mcp bootstrap` before wiring any additional environment variables by hand.
 
+## Onboarding guidance
+
+To get branch-aware onboarding help after bootstrap:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent codex
+donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent hermes
+```
+
+The onboarding payload includes:
+- current branch and worktree name
+- the active task for that branch, if one exists
+- the generated repo-local onboarding files
+- the next recommended DoneGate command when a task still needs to be created or activated
+
 ## Active task context
 
 v0.2 also introduces a small repo-local active task context:
@@ -156,6 +178,15 @@ donegate-mcp --data-root .donegate-mcp task clear-active
 
 The bundled `pre-commit` and `pre-push` hooks now fall back to this active task when `TASK_ID` is not explicitly set.
 
+When you activate from a git repository, DoneGate now binds the active task to the current branch as well as the global fallback slot:
+
+```bash
+donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
+donegate-mcp --data-root .donegate-mcp --json task active --repo-root .
+```
+
+This lets different branches resolve different active tasks while still keeping a simple default for non-git contexts.
+
 ## Supervision reporting
 
 To check whether the repository currently has work that is not tied to an active task:
@@ -164,10 +195,30 @@ To check whether the repository currently has work that is not tied to an active
 donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
 ```
 
-The v0.2 supervision read model currently reports:
+The v0.3 supervision read model reports:
 - `clean` when the working tree has no relevant changes
 - `needs_task` when files changed but no active task is set
-- `tracked` when files changed and an active task is present
+- `task_mismatch` when files changed outside the active task scope
+- `needs_revalidation` when the active task has spec drift
+- `stale_verification` when the diff is covered but verification has not caught up
+- `stale_docs` when verification passed but documentation sync is still behind
+- `tracked` when changes are covered and no stronger warning applies
+
+Supervision reads branch-scoped active context when `--repo-root` is provided.
+Tasks can also declare repo-owned scopes:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json task create \
+  --title "task scope example" \
+  --spec-ref docs/spec.md \
+  --owned-path src/donegate_mcp \
+  --owned-path tests
+```
+
+When scopes are present, supervision also reports:
+- `covered_files` for changes the active task owns
+- `uncovered_files` for changes that need a different task or a wider scope
+- `policy.pre_commit` and `policy.pre_push` guidance that managed hooks use before running self-tests
 
 ## State files
 
