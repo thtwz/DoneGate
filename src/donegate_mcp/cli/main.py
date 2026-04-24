@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -13,6 +14,19 @@ def _csv_list(value: str | None) -> list[str] | None:
     if value is None:
         return None
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _json_object_list(values: list[str]) -> list[dict]:
+    objects: list[dict] = []
+    for index, raw_value in enumerate(values, start=1):
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError as exc:
+            raise ValidationError(f"--finding-json #{index} is not valid JSON: {exc.msg}") from exc
+        if not isinstance(parsed, dict):
+            raise ValidationError(f"--finding-json #{index} must decode to a JSON object")
+        objects.append(parsed)
+    return objects
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,6 +73,20 @@ def build_parser() -> argparse.ArgumentParser:
     deviation_add.add_argument("--details", required=True)
     deviation_add.add_argument("--spec-ref")
     deviation_sub.add_parser("list")
+
+    review = sub.add_parser("review")
+    review_sub = review.add_subparsers(dest="review_command", required=True)
+    review_list = review_sub.add_parser("list")
+    review_list.add_argument("--task-id")
+    review_list.add_argument("--checkpoint", choices=["submit", "pre_done", "manual"])
+    review_list.add_argument("--status", choices=["requested", "completed"])
+    review_list.add_argument("--include-findings", action="store_true")
+
+    review_disposition = review_sub.add_parser("disposition")
+    review_disposition.add_argument("finding_id")
+    review_disposition.add_argument("--to", required=True, choices=["open", "accepted", "spawned_followup", "waived", "resolved"])
+    review_disposition.add_argument("--notes")
+    review_disposition.add_argument("--followup-task-id")
 
     task = sub.add_parser("task")
     task_sub = task.add_subparsers(dest="task_command", required=True)
@@ -123,6 +151,21 @@ def build_parser() -> argparse.ArgumentParser:
     protocol.add_argument("--owned-paths")
     protocol.add_argument("--plan-node-id")
 
+    task_review = task_sub.add_parser("review")
+    task_review.add_argument("task_id")
+    task_review.add_argument("--checkpoint", default="manual", choices=["submit", "pre_done", "manual"])
+    task_review.add_argument("--provider", default="manual", choices=["manual", "host_skill"])
+    task_review.add_argument("--summary", default="")
+    task_review.add_argument("--recommendation", default="proceed", choices=["proceed", "proceed_with_followups", "needs_human_attention"])
+    task_review.add_argument("--finding-json", action="append", dest="finding_json", default=[])
+    task_review.add_argument("--review-run-id")
+
+    create_from_finding = task_sub.add_parser("create-from-finding")
+    create_from_finding.add_argument("finding_id")
+    create_from_finding.add_argument("--title")
+    create_from_finding.add_argument("--summary")
+    create_from_finding.add_argument("--plan-node-id")
+
     self_test = task_sub.add_parser("self-test")
     self_test.add_argument("task_id")
     self_test.add_argument("--workdir")
@@ -160,6 +203,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.refresh_spec(args.spec_ref, reason=args.reason)
         elif args.command == "deviation":
             payload = service.list_deviations() if args.deviation_command == "list" else service.record_deviation(args.task_id, args.summary, args.details, spec_ref=args.spec_ref)
+        elif args.command == "review":
+            payload = _run_review_command(service, args)
         elif args.command == "task":
             payload = _run_task_command(service, args)
         else:
@@ -208,6 +253,23 @@ def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dic
         return service.record_doc_sync(args.task_id, args.result, ref=args.ref, notes=args.notes)
     if cmd == "protocol":
         return service.update_acceptance_protocol(args.task_id, verification_mode=args.verification_mode, test_commands=_csv_list(args.test_commands), required_doc_refs=_csv_list(args.required_doc_refs), required_artifacts=_csv_list(args.required_artifacts), owned_paths=_csv_list(args.owned_paths), plan_node_id=args.plan_node_id)
+    if cmd == "review":
+        return service.record_task_review(
+            args.task_id,
+            checkpoint=args.checkpoint,
+            provider_id=args.provider,
+            summary=args.summary,
+            overall_recommendation=args.recommendation,
+            findings=_json_object_list(args.finding_json),
+            review_run_id=args.review_run_id,
+        )
+    if cmd == "create-from-finding":
+        return service.create_followup_task_from_finding(
+            args.finding_id,
+            title=args.title,
+            summary=args.summary,
+            plan_node_id=args.plan_node_id,
+        )
     if cmd == "self-test":
         return service.run_self_test(args.task_id, workdir=args.workdir)
     if cmd == "done":
@@ -219,6 +281,25 @@ def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dic
     if cmd == "unblock":
         return service.unblock_task(args.task_id, args.to)
     raise ValidationError(f"unknown task command {cmd}")
+
+
+def _run_review_command(service: DoneGateService, args: argparse.Namespace) -> dict:
+    cmd = args.review_command
+    if cmd == "list":
+        return service.list_reviews(
+            task_id=args.task_id,
+            checkpoint=args.checkpoint,
+            status=args.status,
+            include_findings=args.include_findings,
+        )
+    if cmd == "disposition":
+        return service.set_review_finding_disposition(
+            args.finding_id,
+            disposition=args.to,
+            notes=args.notes,
+            followup_task_id=args.followup_task_id,
+        )
+    raise ValidationError(f"unknown review command {cmd}")
 
 
 if __name__ == "__main__":

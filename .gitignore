@@ -7,6 +7,8 @@ __pycache__/
 *.egg-info/
 
 .donegate-mcp/
+.donegate-mcp-repo/
+.donegate-mcp.backup*/
 build/
 dist/
 

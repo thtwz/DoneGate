@@ -11,6 +11,8 @@ SUPERVISION_FILENAME = "supervision.json"
 DEVIATIONS_FILENAME = "deviations.jsonl"
 TASKS_DIRNAME = "tasks"
 EVENTS_DIRNAME = "events"
+REVIEW_RUNS_DIRNAME = "review_runs"
+REVIEW_FINDINGS_DIRNAME = "review_findings"
 SCHEMA_VERSION = 1
 DEFAULT_ENCODING = "utf-8"
 

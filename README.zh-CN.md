@@ -24,6 +24,8 @@ DoneGate MCP 主要想做到：
 - 让人类和 AI agent 使用同一套 done 规则
 - 保持本地优先，不依赖托管控制平面
 - 能从 CLI、git hooks、CI、Hermes MCP、Codex plugin 一起接入
+- 用建议型架构审查记录“验收通过但没有真正满足用户需求”的缺口
+- 把有价值的审查发现直接拆成可跟踪的后续任务
 
 ## DoneGate 的核心规则
 
@@ -85,6 +87,43 @@ donegate-mcp --data-root .donegate-mcp task doc-sync TASK-0001 --result synced -
 donegate-mcp --data-root .donegate-mcp --json task done TASK-0001
 ```
 
+## 建议型架构审查
+
+v0.4 新增了 advisory review 层，用来兜住传统 verification 很难发现的问题：功能虽然通过验收，但仍然没有满足真实用户意图。
+
+这一层默认是建议型，不是硬门禁：
+- 不阻断 `done`
+- 不替代 verification 或 doc sync
+- 把架构师视角的发现记录成结构化状态
+- 支持把发现一键转成 follow-up task
+
+任务进入 `submit` 和 `done` 前会自动留下 advisory review request：
+
+```bash
+donegate-mcp --data-root .donegate-mcp task submit TASK-0001
+donegate-mcp --data-root .donegate-mcp --json review list --task-id TASK-0001 --include-findings
+```
+
+人类或宿主 LLM 可以把审查结论写回 DoneGate：
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
+  --checkpoint manual \
+  --provider manual \
+  --summary "流程验收通过了，但高频用户仍然缺少快速路径。" \
+  --recommendation proceed_with_followups \
+  --finding-json '{"dimension":"outcome_gap","severity":"medium","title":"缺少快速路径","details":"已验收流程对重复使用者来说步骤仍然过多。","recommended_action":"增加快捷流程。","suggested_task_title":"增加快速路径","suggested_task_summary":"减少高频用户完成任务所需步骤。"}'
+```
+
+如果这个发现值得落地，就直接拆成任务：
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json task create-from-finding FINDING-1234abcd
+donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks
+```
+
+MCP 宿主可以使用同等能力：`task_review`、`review_list`、`review_disposition`、`task_create_from_finding`。在 Codex 里，推荐让 DoneGate skill 读取 pending advisory request，在宿主侧执行架构师视角审查，再把标准化 findings 写回 MCP。
+
 ## 给 LLM / Agent 的零上下文接入说明
 
 如果你只把这个仓库的 git 地址给一个大模型，推荐它按下面顺序操作：
@@ -136,6 +175,7 @@ donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
 4. 确认当前分支有 active task
 5. 在 commit / push 前读取 `supervision`
 6. 在 `done` 之前记录 verification 和 doc sync
+7. 对重要任务检查 advisory review，把已接受的真实需求缺口拆成 follow-up task
 
 ## 主要集成方式
 
@@ -214,6 +254,7 @@ donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
 - [端到端演示](docs/end-to-end-demo.md)
 - [贡献指南](CONTRIBUTING.md)
 - [发布检查表](docs/release-checklist.md)
+- [v0.4.0 发布说明](docs/release-notes-v0.4.0.md)
 
 ## 许可证
 

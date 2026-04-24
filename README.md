@@ -50,6 +50,8 @@ DoneGate MCP is intentionally not trying to be:
 - Self-test execution with artifact logging
 - Spec hash tracking and drift detection
 - Deviation logging for intentional exceptions
+- Advisory review records for architect-style outcome gaps
+- Follow-up task generation from review findings
 - Dashboard, plan, progress, and supervision read models
 - Branch-scoped active task context
 - Task scope ownership and coverage checks
@@ -63,6 +65,7 @@ DoneGate MCP is intentionally not trying to be:
 - [Repository metadata](docs/repository-metadata.md)
 - [Contributing](CONTRIBUTING.md)
 - [Release checklist](docs/release-checklist.md)
+- [v0.4.0 release notes](docs/release-notes-v0.4.0.md)
 - [Hermes example config](examples/hermes-mcp-config.yaml)
 
 ## Human Quick Start
@@ -140,6 +143,43 @@ donegate-mcp --data-root .donegate-mcp --json task reopen TASK-0001
 6. If completed work must resume, use `task reopen` to move it back into an active non-done state.
 7. Refresh spec hashes when requirements change and revalidate stale work.
 
+## Advisory Review
+
+DoneGate v0.4 adds an advisory review layer for the gap that pure verification cannot catch: work that passes its formal acceptance path but still misses the real user need.
+
+This layer is intentionally advisory:
+- it does not block `done`
+- it does not replace verification or doc sync
+- it records architect-style findings as explicit state
+- it can convert findings into follow-up tasks
+
+Advisory review requests are created automatically when a task is submitted for verification and again before it reaches `done`.
+
+```bash
+donegate-mcp --data-root .donegate-mcp task submit TASK-0001
+donegate-mcp --data-root .donegate-mcp --json review list --task-id TASK-0001 --include-findings
+```
+
+A human or host LLM can record a review finding:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
+  --checkpoint manual \
+  --provider manual \
+  --summary "The literal flow passes, but frequent users still need a faster path." \
+  --recommendation proceed_with_followups \
+  --finding-json '{"dimension":"outcome_gap","severity":"medium","title":"Missing fast path","details":"The accepted workflow still takes too many steps for repeat users.","recommended_action":"Add a shortcut workflow.","suggested_task_title":"Add fast path","suggested_task_summary":"Reduce the number of steps for frequent users."}'
+```
+
+Then turn a useful finding into tracked work:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json task create-from-finding FINDING-1234abcd
+donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks
+```
+
+MCP hosts get the same surface through `task_review`, `review_list`, `review_disposition`, and `task_create_from_finding`. In Codex, the recommended pattern is for the DoneGate skill to inspect pending advisory requests, run an architect-style review in the host, and call the MCP tool to record normalized findings.
+
 ## LLM / Agent Quickstart From Git URL
 
 If you give an LLM only this repository URL, the intended zero-context bootstrap path is:
@@ -187,6 +227,7 @@ An LLM integrating DoneGate MCP should follow this sequence:
 4. Ensure a branch-scoped active task exists before editing code.
 5. Use `donegate-mcp --json supervision --repo-root .` before commits or pushes.
 6. Record verification and doc sync before calling a task done.
+7. Inspect advisory reviews before closing substantial work, and convert accepted outcome gaps into follow-up tasks.
 
 ## Integrations
 
@@ -290,6 +331,8 @@ DoneGate stores repo-local state under `.donegate-mcp/`, including:
 - `deviations.jsonl`
 - `tasks/`
 - `events/`
+- `review_runs/`
+- `review_findings/`
 - `artifacts/`
 - `onboarding/`
 

@@ -111,13 +111,53 @@ class DoneGateMcpApp:
             return self._safe(service.block_task, task_id, reason)
 
         @server.tool("task_reopen")
-        def task_reopen(task_id: str, target_status: str = "in_progress") -> dict[str, Any]:
-            return self._safe(self.service.reopen_task, task_id, target_status=target_status)
+        def task_reopen(task_id: str, target_status: str = "in_progress", repo_root: str | None = None, data_root: str | None = None) -> dict[str, Any]:
+            service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
+            return self._safe(service.reopen_task, task_id, target_status=target_status)
 
         @server.tool("task_unblock")
         def task_unblock(task_id: str, target_status: str, repo_root: str | None = None, data_root: str | None = None) -> dict[str, Any]:
             service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
             return self._safe(service.unblock_task, task_id, target_status)
+
+        @server.tool("task_review")
+        def task_review(
+            task_id: str,
+            checkpoint: str = "manual",
+            provider_id: str = "manual",
+            summary: str = "",
+            overall_recommendation: str = "proceed",
+            findings: list[dict[str, Any]] | None = None,
+            review_run_id: str | None = None,
+            repo_root: str | None = None,
+            data_root: str | None = None,
+        ) -> dict[str, Any]:
+            service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
+            return self._safe(
+                service.record_task_review,
+                task_id,
+                checkpoint=checkpoint,
+                provider_id=provider_id,
+                summary=summary,
+                overall_recommendation=overall_recommendation,
+                findings=findings,
+                review_run_id=review_run_id,
+            )
+
+        @server.tool("review_list")
+        def review_list(task_id: str | None = None, checkpoint: str | None = None, status: str | None = None, include_findings: bool = False, repo_root: str | None = None, data_root: str | None = None) -> dict[str, Any]:
+            service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
+            return self._safe(service.list_reviews, task_id=task_id, checkpoint=checkpoint, status=status, include_findings=include_findings)
+
+        @server.tool("review_disposition")
+        def review_disposition(finding_id: str, disposition: str, notes: str | None = None, followup_task_id: str | None = None, repo_root: str | None = None, data_root: str | None = None) -> dict[str, Any]:
+            service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
+            return self._safe(service.set_review_finding_disposition, finding_id, disposition, notes=notes, followup_task_id=followup_task_id)
+
+        @server.tool("task_create_from_finding")
+        def task_create_from_finding(finding_id: str, title: str | None = None, summary: str | None = None, plan_node_id: str | None = None, repo_root: str | None = None, data_root: str | None = None) -> dict[str, Any]:
+            service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
+            return self._safe(service.create_followup_task_from_finding, finding_id, title=title, summary=summary, plan_node_id=plan_node_id)
 
     @staticmethod
     def _safe(func: Callable[..., dict[str, Any]], *args: Any, **kwargs: Any) -> dict[str, Any]:

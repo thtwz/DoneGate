@@ -33,6 +33,37 @@ class DocSyncStatus(str, Enum):
     SYNCED = "synced"
 
 
+class ReviewCheckpoint(str, Enum):
+    SUBMIT = "submit"
+    PRE_DONE = "pre_done"
+    MANUAL = "manual"
+
+
+class ReviewRunStatus(str, Enum):
+    REQUESTED = "requested"
+    COMPLETED = "completed"
+
+
+class ReviewRecommendation(str, Enum):
+    PROCEED = "proceed"
+    PROCEED_WITH_FOLLOWUPS = "proceed_with_followups"
+    NEEDS_HUMAN_ATTENTION = "needs_human_attention"
+
+
+class ReviewFindingSeverity(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class ReviewFindingDisposition(str, Enum):
+    OPEN = "open"
+    ACCEPTED = "accepted"
+    SPAWNED_FOLLOWUP = "spawned_followup"
+    WAIVED = "waived"
+    RESOLVED = "resolved"
+
+
 @dataclass(slots=True)
 class ProjectState:
     schema_version: int
@@ -85,6 +116,9 @@ class Task:
     spec_hash: str | None = None
     stale_reason: str | None = None
     needs_revalidation: bool = False
+    parent_task_id: str | None = None
+    source_task_id: str | None = None
+    source_finding_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -114,6 +148,9 @@ class Task:
         payload.setdefault("spec_hash", None)
         payload.setdefault("stale_reason", None)
         payload.setdefault("needs_revalidation", False)
+        payload.setdefault("parent_task_id", None)
+        payload.setdefault("source_task_id", None)
+        payload.setdefault("source_finding_id", None)
         payload.pop("projected_status", None)
         payload.pop("status_source", None)
         return cls(**payload)
@@ -182,6 +219,87 @@ class DashboardSummary:
     missing_verification: list[dict[str, Any]]
     missing_docs: list[dict[str, Any]]
     next_actions: list[dict[str, Any]]
+    open_advisories: int = 0
+    high_severity_advisories: int = 0
+    pending_advisory_reviews: int = 0
+    tasks_with_open_advisories: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(slots=True)
+class ReviewFinding:
+    finding_id: str
+    review_run_id: str
+    task_id: str
+    checkpoint: ReviewCheckpoint
+    provider_id: str
+    dimension: str
+    severity: ReviewFindingSeverity
+    title: str
+    details: str
+    recommended_action: str | None = None
+    suggested_task_title: str | None = None
+    suggested_task_summary: str | None = None
+    suggested_owned_paths: list[str] = field(default_factory=list)
+    disposition: ReviewFindingDisposition = ReviewFindingDisposition.OPEN
+    followup_task_id: str | None = None
+    notes: str | None = None
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["checkpoint"] = self.checkpoint.value
+        data["severity"] = self.severity.value
+        data["disposition"] = self.disposition.value
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewFinding":
+        payload = dict(data)
+        payload["checkpoint"] = ReviewCheckpoint(payload["checkpoint"])
+        payload["severity"] = ReviewFindingSeverity(payload["severity"])
+        payload["disposition"] = ReviewFindingDisposition(payload["disposition"])
+        payload.setdefault("recommended_action", None)
+        payload.setdefault("suggested_task_title", None)
+        payload.setdefault("suggested_task_summary", None)
+        payload.setdefault("suggested_owned_paths", [])
+        payload.setdefault("followup_task_id", None)
+        payload.setdefault("notes", None)
+        return cls(**payload)
+
+
+@dataclass(slots=True)
+class ReviewRun:
+    review_run_id: str
+    task_id: str
+    checkpoint: ReviewCheckpoint
+    provider_id: str
+    status: ReviewRunStatus
+    source_task_updated_at: str
+    summary: str = ""
+    overall_recommendation: ReviewRecommendation = ReviewRecommendation.PROCEED
+    request_hint: str | None = None
+    finding_ids: list[str] = field(default_factory=list)
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["checkpoint"] = self.checkpoint.value
+        data["status"] = self.status.value
+        data["overall_recommendation"] = self.overall_recommendation.value
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ReviewRun":
+        payload = dict(data)
+        payload["checkpoint"] = ReviewCheckpoint(payload["checkpoint"])
+        payload["status"] = ReviewRunStatus(payload["status"])
+        payload["overall_recommendation"] = ReviewRecommendation(payload["overall_recommendation"])
+        payload.setdefault("summary", "")
+        payload.setdefault("request_hint", None)
+        payload.setdefault("finding_ids", [])
+        return cls(**payload)

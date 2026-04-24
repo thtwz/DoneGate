@@ -118,7 +118,38 @@ donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent h
 
 The response includes the current branch, any branch-bound active task, the generated onboarding file paths, and the next recommended command if work still needs to be attached to a task.
 
-## 6. MCP integration
+## 6. Advisory review
+
+Advisory review helps agents catch outcome gaps that can pass verification while still missing the real user need. It is advisory in v0.4: findings do not block `done`, but they stay visible and can be converted into follow-up tasks.
+
+DoneGate creates review requests when a task is submitted for verification and again before completion:
+
+```bash
+donegate-mcp --data-root .donegate-mcp task submit TASK-0001
+donegate-mcp --data-root .donegate-mcp --json review list --task-id TASK-0001 --include-findings
+```
+
+Record a finding from a human, Codex skill, or other host reviewer:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
+  --checkpoint manual \
+  --provider manual \
+  --summary "The implementation passes the literal gate but leaves a user-value gap." \
+  --recommendation proceed_with_followups \
+  --finding-json '{"dimension":"outcome_gap","severity":"medium","title":"Missing fast path","details":"Frequent users still need too many steps.","recommended_action":"Add a shortcut flow.","suggested_task_title":"Add fast path","suggested_task_summary":"Reduce repeated-user steps."}'
+```
+
+Create tracked follow-up work from the finding:
+
+```bash
+donegate-mcp --data-root .donegate-mcp --json task create-from-finding FINDING-1234abcd
+donegate-mcp --data-root .donegate-mcp --json review disposition FINDING-1234abcd --to accepted
+```
+
+MCP clients should use the matching tools: `task_review`, `review_list`, `review_disposition`, and `task_create_from_finding`.
+
+## 7. MCP integration
 
 ### Hermes native MCP
 
@@ -163,7 +194,7 @@ For Trae-style plugin configs, point the plugin at the same `donegate-mcp-serve`
 }
 ```
 
-## 7. Codex plugin integration
+## 8. Codex plugin integration
 
 If you want to expose DoneGate MCP inside Codex as a local plugin, keep the plugin layer thin and point it at the same MCP entrypoint:
 
@@ -179,10 +210,10 @@ If Codex runs DoneGate as a shared plugin, prefer launching Codex from a shell t
 
 If the host process cannot inherit that environment, pass `repo_root` explicitly in DoneGate MCP tool calls.
 
-## 8. Operational note
+## 9. Operational note
 
 For local adoption, the CLI is the primary stable interface. The MCP adapter is there for agent orchestration, but hook and CI integration should call the CLI directly.
 
-## 9. Naming note
+## 10. Naming note
 
 The public project name is `DoneGate MCP`. The CLI and Python module path are `donegate-mcp` and `donegate_mcp`.

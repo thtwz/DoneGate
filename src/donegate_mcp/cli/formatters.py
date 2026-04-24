@@ -9,6 +9,14 @@ def render(payload: dict[str, Any], as_json: bool) -> str:
         return json.dumps(payload, indent=2, sort_keys=True)
     if not payload.get("ok", False):
         return "ERROR: " + "; ".join(payload.get("errors", ["unknown error"]))
+    if "review" in payload:
+        review = payload["review"]
+        return f"{review['review_run_id']} {review['status']} {review['checkpoint']}"
+    if "finding" in payload and "task" not in payload:
+        finding = payload["finding"]
+        return f"{finding['finding_id']} {finding['disposition']} {finding['title']}"
+    if "reviews" in payload:
+        return "\n".join(f"{review['review_run_id']} {review['status']} {review['checkpoint']} {review['task_id']}" for review in payload["reviews"]) or "no reviews"
     if "task" in payload:
         task = payload["task"]
         return f"{task['task_id']} {task['status']} {task['title']}"

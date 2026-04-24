@@ -11,10 +11,18 @@ from typing import Any
 
 from donegate_mcp.config import DEVIATIONS_FILENAME, SCHEMA_VERSION, resolve_data_root
 from donegate_mcp.errors import ValidationError
+from donegate_mcp.domain.review_providers import get_review_provider
 from donegate_mcp.models import (
     DocSyncRecord,
     DocSyncStatus,
     ProjectState,
+    ReviewCheckpoint,
+    ReviewFinding,
+    ReviewFindingDisposition,
+    ReviewFindingSeverity,
+    ReviewRecommendation,
+    ReviewRun,
+    ReviewRunStatus,
     SelfTestRecord,
     Task,
     TaskEvent,
@@ -28,6 +36,7 @@ from donegate_mcp.domain.lifecycle import apply_block, apply_doc_sync, apply_tra
 from donegate_mcp.storage.event_store import EventStore
 from donegate_mcp.storage.fs import append_jsonl, ensure_dir, make_executable, write_text
 from donegate_mcp.storage.project_store import ProjectStore
+from donegate_mcp.storage.review_store import ReviewFindingStore, ReviewRunStore
 from donegate_mcp.storage.state_store import StateStore
 from donegate_mcp.storage.task_store import TaskStore
 
@@ -44,6 +53,8 @@ class DoneGateService:
         ensure_dir(self.data_root)
         self.projects = ProjectStore(self.data_root)
         self.tasks = TaskStore(self.data_root)
+        self.review_runs = ReviewRunStore(self.data_root)
+        self.review_findings = ReviewFindingStore(self.data_root)
         self.events = EventStore(self.data_root)
         self.states = StateStore(self.data_root)
         self.artifacts_dir = ensure_dir(self.data_root / "artifacts")
@@ -211,6 +222,150 @@ class DoneGateService:
             },
         }
 
+    @staticmethod
+    def _review_run_id() -> str:
+        return f"REVIEW-{uuid4().hex[:8]}"
+
+    @staticmethod
+    def _review_finding_id() -> str:
+        return f"FINDING-{uuid4().hex[:8]}"
+
+    def _list_review_runs(
+        self,
+        *,
+        task_id: str | None = None,
+        checkpoint: ReviewCheckpoint | None = None,
+        status: ReviewRunStatus | None = None,
+    ) -> list[ReviewRun]:
+        runs = self.review_runs.list()
+        if task_id is not None:
+            runs = [run for run in runs if run.task_id == task_id]
+        if checkpoint is not None:
+            runs = [run for run in runs if run.checkpoint == checkpoint]
+        if status is not None:
+            runs = [run for run in runs if run.status == status]
+        return sorted(runs, key=lambda run: (run.created_at, run.review_run_id))
+
+    def _list_review_findings(
+        self,
+        *,
+        task_id: str | None = None,
+        review_run_id: str | None = None,
+        disposition: ReviewFindingDisposition | None = None,
+    ) -> list[ReviewFinding]:
+        findings = self.review_findings.list()
+        if task_id is not None:
+            findings = [finding for finding in findings if finding.task_id == task_id]
+        if review_run_id is not None:
+            findings = [finding for finding in findings if finding.review_run_id == review_run_id]
+        if disposition is not None:
+            findings = [finding for finding in findings if finding.disposition == disposition]
+        return sorted(findings, key=lambda finding: (finding.created_at, finding.finding_id))
+
+    def _advisory_summary(self, task_id: str) -> dict[str, Any]:
+        runs = self._list_review_runs(task_id=task_id)
+        findings = self._list_review_findings(task_id=task_id)
+        open_findings = [finding for finding in findings if finding.disposition in {ReviewFindingDisposition.OPEN, ReviewFindingDisposition.ACCEPTED, ReviewFindingDisposition.SPAWNED_FOLLOWUP}]
+        high_findings = [finding for finding in open_findings if finding.severity == ReviewFindingSeverity.HIGH]
+        pending_runs = [run for run in runs if run.status == ReviewRunStatus.REQUESTED]
+        completed_runs = [run for run in runs if run.status == ReviewRunStatus.COMPLETED]
+        latest_completed = completed_runs[-1] if completed_runs else None
+        return {
+            "open_advisories": len(open_findings),
+            "high_severity_advisories": len(high_findings),
+            "pending_reviews": len(pending_runs),
+            "last_reviewed_at": latest_completed.updated_at if latest_completed else None,
+            "last_review_recommendation": latest_completed.overall_recommendation.value if latest_completed else None,
+        }
+
+    def _task_payload(self, task: Task) -> dict[str, Any]:
+        payload = task.to_dict()
+        payload["advisory_summary"] = self._advisory_summary(task.task_id)
+        return payload
+
+    def _normalize_checkpoint(self, checkpoint: str) -> ReviewCheckpoint:
+        try:
+            return ReviewCheckpoint(checkpoint)
+        except ValueError as exc:
+            raise ValidationError(f"unknown review checkpoint: {checkpoint}") from exc
+
+    def _normalize_recommendation(self, recommendation: str) -> ReviewRecommendation:
+        try:
+            return ReviewRecommendation(recommendation)
+        except ValueError as exc:
+            raise ValidationError(f"unknown review recommendation: {recommendation}") from exc
+
+    def _normalize_review_run_status(self, status: str) -> ReviewRunStatus:
+        try:
+            return ReviewRunStatus(status)
+        except ValueError as exc:
+            raise ValidationError(f"unknown review status: {status}") from exc
+
+    def _normalize_finding_severity(self, severity: str) -> ReviewFindingSeverity:
+        try:
+            return ReviewFindingSeverity(severity)
+        except ValueError as exc:
+            raise ValidationError(f"unknown review finding severity: {severity}") from exc
+
+    def _normalize_finding_disposition(self, disposition: str) -> ReviewFindingDisposition:
+        try:
+            return ReviewFindingDisposition(disposition)
+        except ValueError as exc:
+            raise ValidationError(f"unknown review finding disposition: {disposition}") from exc
+
+    @staticmethod
+    def _required_finding_field(finding_payload: dict[str, Any], field_name: str) -> str:
+        value = finding_payload.get(field_name)
+        if not isinstance(value, str) or not value.strip():
+            raise ValidationError(f"review finding requires non-empty {field_name}")
+        return value
+
+    def _finding_payload(self, finding: ReviewFinding) -> dict[str, Any]:
+        return finding.to_dict()
+
+    def _review_run_payload(self, run: ReviewRun, *, include_findings: bool = False) -> dict[str, Any]:
+        payload = run.to_dict()
+        if include_findings:
+            payload["findings"] = [finding.to_dict() for finding in self._list_review_findings(review_run_id=run.review_run_id)]
+        return payload
+
+    def _ensure_advisory_review_request(
+        self,
+        task: Task,
+        checkpoint: ReviewCheckpoint,
+        provider_id: str = "host_skill",
+    ) -> ReviewRun | None:
+        existing = [
+            run
+            for run in self._list_review_runs(task_id=task.task_id, checkpoint=checkpoint)
+            if run.source_task_updated_at == task.updated_at
+        ]
+        if existing:
+            return existing[-1]
+        provider = get_review_provider(provider_id)
+        review_run = ReviewRun(
+            review_run_id=self._review_run_id(),
+            task_id=task.task_id,
+            checkpoint=checkpoint,
+            provider_id=provider.provider_id,
+            status=ReviewRunStatus.REQUESTED,
+            source_task_updated_at=task.updated_at,
+            request_hint=provider.build_request_hint(task, checkpoint),
+            overall_recommendation=ReviewRecommendation.NEEDS_HUMAN_ATTENTION,
+        )
+        self.review_runs.save(review_run)
+        self._emit(
+            task.task_id,
+            "advisory_review_requested",
+            {
+                "review_run_id": review_run.review_run_id,
+                "checkpoint": checkpoint.value,
+                "provider_id": provider.provider_id,
+                "source_task_updated_at": task.updated_at,
+            },
+        )
+        return review_run
+
     def _write_onboarding_assets(self, repo_root: Path, project: ProjectState) -> dict[str, str]:
         env_path = (self.data_root / "env.sh").resolve()
         onboarding_dir = ensure_dir(self.data_root / "onboarding")
@@ -342,7 +497,8 @@ class DoneGateService:
         plan["specs"] = list(spec_map.values())
         self.states.save_plan(plan)
 
-        summary = build_dashboard(self._require_project().project_name, tasks).to_dict()
+        advisory_summaries = {task.task_id: self._advisory_summary(task.task_id) for task in tasks}
+        summary = build_dashboard(self._require_project().project_name, tasks, advisory_summaries=advisory_summaries).to_dict()
         stale_tasks = [
             {"task_id": task.task_id, "title": task.title, "stale_reason": task.stale_reason, "spec_ref": task.spec_ref}
             for task in tasks if task.needs_revalidation
@@ -357,6 +513,7 @@ class DoneGateService:
                     "status": task.status.value,
                     "plan_node_id": task.plan_node_id or task.task_id.lower(),
                     "needs_revalidation": task.needs_revalidation,
+                    "advisory_summary": advisory_summaries.get(task.task_id),
                 }
                 for task in tasks
             ],
@@ -447,7 +604,21 @@ class DoneGateService:
             "errors": [],
         }
 
-    def create_task(self, title: str, spec_ref: str, summary: str = "", verification_mode: str = "manual", test_commands: list[str] | None = None, required_doc_refs: list[str] | None = None, required_artifacts: list[str] | None = None, owned_paths: list[str] | None = None, plan_node_id: str | None = None) -> dict[str, Any]:
+    def create_task(
+        self,
+        title: str,
+        spec_ref: str,
+        summary: str = "",
+        verification_mode: str = "manual",
+        test_commands: list[str] | None = None,
+        required_doc_refs: list[str] | None = None,
+        required_artifacts: list[str] | None = None,
+        owned_paths: list[str] | None = None,
+        plan_node_id: str | None = None,
+        parent_task_id: str | None = None,
+        source_task_id: str | None = None,
+        source_finding_id: str | None = None,
+    ) -> dict[str, Any]:
         project = self._require_project()
         repo_root = self._resolve_repo_root(None, project=project, data_root=self.data_root)
         normalized_spec_ref = self._normalize_repo_path(spec_ref, repo_root)
@@ -458,12 +629,29 @@ class DoneGateService:
         project.updated_at = utc_now()
         task_id = f"TASK-{project.task_counter:04d}"
         spec_version, spec_hash = self._spec_snapshot(normalized_spec_ref)
-        task = Task(task_id=task_id, title=title, spec_ref=normalized_spec_ref or spec_ref, summary=summary, status=TaskStatus.DRAFT, verification_mode=verification_mode, test_commands=list(test_commands or []), required_doc_refs=[path or "" for path in normalized_doc_refs], required_artifacts=[path or "" for path in normalized_artifacts], owned_paths=[path or "" for path in normalized_owned_paths], plan_node_id=plan_node_id or task_id.lower(), spec_version=spec_version, spec_hash=spec_hash)
+        task = Task(
+            task_id=task_id,
+            title=title,
+            spec_ref=normalized_spec_ref or spec_ref,
+            summary=summary,
+            status=TaskStatus.DRAFT,
+            verification_mode=verification_mode,
+            test_commands=list(test_commands or []),
+            required_doc_refs=[path or "" for path in normalized_doc_refs],
+            required_artifacts=[path or "" for path in normalized_artifacts],
+            owned_paths=[path or "" for path in normalized_owned_paths],
+            plan_node_id=plan_node_id or task_id.lower(),
+            spec_version=spec_version,
+            spec_hash=spec_hash,
+            parent_task_id=parent_task_id,
+            source_task_id=source_task_id,
+            source_finding_id=source_finding_id,
+        )
         self.projects.save(project)
         self.tasks.save(task)
         self._emit(task_id, "task_created", task.to_dict())
         self._sync_state_files()
-        return {"ok": True, "task": task.to_dict(), "events_written": 1, "errors": []}
+        return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": []}
 
     def activate_task(self, task_id: str, repo_root: str | Path | None = None) -> dict[str, Any]:
         self._require_project()
@@ -481,13 +669,13 @@ class DoneGateService:
         session["updated_at"] = utc_now()
         self.states.save_session(session)
         self._emit(task.task_id, "active_task_changed", {"active_task_id": task.task_id, "branch": branch})
-        return {"ok": True, "active_task": task.to_dict(), "session": session, "errors": []}
+        return {"ok": True, "active_task": self._task_payload(task), "session": session, "errors": []}
 
     def get_active_task(self, repo_root: str | Path | None = None) -> dict[str, Any]:
         self._require_project()
         session = self._session_payload()
         task = self._current_active_task(repo_root=repo_root)
-        return {"ok": True, "active_task": task.to_dict() if task else None, "session": session, "errors": []}
+        return {"ok": True, "active_task": self._task_payload(task) if task else None, "session": session, "errors": []}
 
     def clear_active_task(self, repo_root: str | Path | None = None) -> dict[str, Any]:
         project = self._require_project()
@@ -547,7 +735,14 @@ class DoneGateService:
             "covered_files": covered_files,
             "uncovered_files": uncovered_files,
             "active_task_id": active_task.task_id if active_task else None,
-            "active_task": active_task.to_dict() if active_task else None,
+            "active_task": self._task_payload(active_task) if active_task else None,
+            "advisory_summary": self._advisory_summary(active_task.task_id) if active_task else {
+                "open_advisories": 0,
+                "high_severity_advisories": 0,
+                "pending_reviews": 0,
+                "last_reviewed_at": None,
+                "last_review_recommendation": None,
+            },
             "policy": policy,
         }
         self.states.save_supervision(payload)
@@ -561,7 +756,7 @@ class DoneGateService:
             tasks = [task for task in tasks if task.status == expected]
         if limit is not None:
             tasks = tasks[:limit]
-        return {"ok": True, "tasks": [task.to_dict() for task in tasks], "errors": []}
+        return {"ok": True, "tasks": [self._task_payload(task) for task in tasks], "errors": []}
 
     def transition_task(self, task_id: str, target_status: str, reason: str | None = None, notes: str | None = None) -> dict[str, Any]:
         self._require_project()
@@ -579,8 +774,12 @@ class DoneGateService:
             task = apply_transition(task, target)
         self.tasks.save(task)
         self._emit(task.task_id, "status_changed", {"target_status": task.status.value, "reason": reason, "notes": notes})
+        if target == TaskStatus.AWAITING_VERIFICATION:
+            self._ensure_advisory_review_request(task, ReviewCheckpoint.SUBMIT)
+        elif target == TaskStatus.DONE:
+            self._ensure_advisory_review_request(task, ReviewCheckpoint.PRE_DONE)
         self._sync_state_files()
-        return {"ok": True, "task": task.to_dict(), "events_written": 1, "errors": [], "warnings": warnings}
+        return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": [], "warnings": warnings}
 
     def record_verification(self, task_id: str, result: str, ref: str | None = None, notes: str | None = None) -> dict[str, Any]:
         self._require_project()
@@ -591,7 +790,7 @@ class DoneGateService:
         self.tasks.save(task)
         self._emit(task.task_id, "verification_recorded", record.to_dict())
         self._sync_state_files()
-        return {"ok": True, "task": task.to_dict(), "record": record.to_dict(), "events_written": 1, "errors": []}
+        return {"ok": True, "task": self._task_payload(task), "record": record.to_dict(), "events_written": 1, "errors": []}
 
     def record_doc_sync(self, task_id: str, result: str, ref: str | None = None, notes: str | None = None) -> dict[str, Any]:
         self._require_project()
@@ -602,7 +801,7 @@ class DoneGateService:
         self.tasks.save(task)
         self._emit(task.task_id, "doc_sync_recorded", record.to_dict())
         self._sync_state_files()
-        return {"ok": True, "task": task.to_dict(), "record": record.to_dict(), "events_written": 1, "errors": []}
+        return {"ok": True, "task": self._task_payload(task), "record": record.to_dict(), "events_written": 1, "errors": []}
 
     def update_acceptance_protocol(self, task_id: str, verification_mode: str | None = None, test_commands: list[str] | None = None, required_doc_refs: list[str] | None = None, required_artifacts: list[str] | None = None, owned_paths: list[str] | None = None, plan_node_id: str | None = None) -> dict[str, Any]:
         project = self._require_project()
@@ -624,7 +823,182 @@ class DoneGateService:
         self.tasks.save(task)
         self._emit(task.task_id, "acceptance_protocol_updated", task.to_dict())
         self._sync_state_files()
-        return {"ok": True, "task": task.to_dict(), "events_written": 1, "errors": []}
+        return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": []}
+
+    def record_task_review(
+        self,
+        task_id: str,
+        checkpoint: str,
+        provider_id: str = "manual",
+        summary: str = "",
+        overall_recommendation: str = ReviewRecommendation.PROCEED.value,
+        findings: list[dict[str, Any]] | None = None,
+        review_run_id: str | None = None,
+    ) -> dict[str, Any]:
+        self._require_project()
+        task = self.tasks.load(task_id)
+        checkpoint_enum = self._normalize_checkpoint(checkpoint)
+        provider = get_review_provider(provider_id)
+        normalized = provider.normalize_input(task, checkpoint_enum, summary, overall_recommendation, findings)
+        recommendation = self._normalize_recommendation(normalized.overall_recommendation)
+
+        if review_run_id is not None:
+            review_run = self.review_runs.load(review_run_id)
+            if review_run.task_id != task_id:
+                raise ValidationError(f"{review_run_id} does not belong to {task_id}")
+        else:
+            pending = [
+                run
+                for run in self._list_review_runs(task_id=task_id, checkpoint=checkpoint_enum, status=ReviewRunStatus.REQUESTED)
+            ]
+            same_provider_pending = [run for run in pending if run.provider_id == provider.provider_id]
+            review_run = (same_provider_pending or pending)[-1] if pending else ReviewRun(
+                review_run_id=self._review_run_id(),
+                task_id=task_id,
+                checkpoint=checkpoint_enum,
+                provider_id=provider.provider_id,
+                status=ReviewRunStatus.REQUESTED,
+                source_task_updated_at=task.updated_at,
+                request_hint=provider.build_request_hint(task, checkpoint_enum),
+            )
+
+        review_run.provider_id = provider.provider_id
+        review_run.status = ReviewRunStatus.COMPLETED
+        review_run.summary = normalized.summary
+        review_run.overall_recommendation = recommendation
+        review_run.updated_at = utc_now()
+
+        finding_ids: list[str] = []
+        serialized_findings: list[dict[str, Any]] = []
+        for finding_payload in normalized.findings:
+            severity = self._normalize_finding_severity(self._required_finding_field(finding_payload, "severity"))
+            finding = ReviewFinding(
+                finding_id=self._review_finding_id(),
+                review_run_id=review_run.review_run_id,
+                task_id=task_id,
+                checkpoint=checkpoint_enum,
+                provider_id=provider.provider_id,
+                dimension=self._required_finding_field(finding_payload, "dimension"),
+                severity=severity,
+                title=self._required_finding_field(finding_payload, "title"),
+                details=self._required_finding_field(finding_payload, "details"),
+                recommended_action=finding_payload.get("recommended_action"),
+                suggested_task_title=finding_payload.get("suggested_task_title"),
+                suggested_task_summary=finding_payload.get("suggested_task_summary"),
+                suggested_owned_paths=list(finding_payload.get("suggested_owned_paths") or []),
+            )
+            self.review_findings.save(finding)
+            finding_ids.append(finding.finding_id)
+            serialized_findings.append(finding.to_dict())
+
+        review_run.finding_ids = finding_ids
+        self.review_runs.save(review_run)
+        self._emit(
+            task_id,
+            "advisory_review_recorded",
+            {
+                "review_run_id": review_run.review_run_id,
+                "checkpoint": checkpoint_enum.value,
+                "provider_id": provider.provider_id,
+                "finding_ids": finding_ids,
+                "overall_recommendation": recommendation.value,
+            },
+        )
+        self._sync_state_files()
+        return {
+            "ok": True,
+            "review": self._review_run_payload(review_run),
+            "findings": serialized_findings,
+            "task": self._task_payload(task),
+            "errors": [],
+        }
+
+    def list_reviews(
+        self,
+        task_id: str | None = None,
+        checkpoint: str | None = None,
+        status: str | None = None,
+        include_findings: bool = False,
+    ) -> dict[str, Any]:
+        self._require_project()
+        checkpoint_enum = self._normalize_checkpoint(checkpoint) if checkpoint else None
+        status_enum = self._normalize_review_run_status(status) if status else None
+        runs = self._list_review_runs(task_id=task_id, checkpoint=checkpoint_enum, status=status_enum)
+        findings = self._list_review_findings(task_id=task_id)
+        payload: dict[str, Any] = {
+            "ok": True,
+            "reviews": [self._review_run_payload(run, include_findings=include_findings) for run in runs],
+            "errors": [],
+        }
+        if include_findings:
+            payload["findings"] = [self._finding_payload(finding) for finding in findings]
+        return payload
+
+    def set_review_finding_disposition(
+        self,
+        finding_id: str,
+        disposition: str,
+        notes: str | None = None,
+        followup_task_id: str | None = None,
+    ) -> dict[str, Any]:
+        self._require_project()
+        finding = self.review_findings.load(finding_id)
+        finding.disposition = self._normalize_finding_disposition(disposition)
+        finding.notes = notes
+        if followup_task_id is not None:
+            finding.followup_task_id = followup_task_id
+        finding.updated_at = utc_now()
+        self.review_findings.save(finding)
+        self._emit(
+            finding.task_id,
+            "advisory_finding_disposition_changed",
+            {
+                "finding_id": finding.finding_id,
+                "disposition": finding.disposition.value,
+                "followup_task_id": finding.followup_task_id,
+            },
+        )
+        self._sync_state_files()
+        return {"ok": True, "finding": self._finding_payload(finding), "errors": []}
+
+    def create_followup_task_from_finding(
+        self,
+        finding_id: str,
+        title: str | None = None,
+        summary: str | None = None,
+        plan_node_id: str | None = None,
+    ) -> dict[str, Any]:
+        self._require_project()
+        finding = self.review_findings.load(finding_id)
+        source_task = self.tasks.load(finding.task_id)
+        followup = self.create_task(
+            title=title or finding.suggested_task_title or f"Follow up: {finding.title}",
+            spec_ref=source_task.spec_ref,
+            summary=summary or finding.suggested_task_summary or finding.details,
+            verification_mode=source_task.verification_mode,
+            test_commands=list(source_task.test_commands),
+            required_doc_refs=list(source_task.required_doc_refs),
+            required_artifacts=list(source_task.required_artifacts),
+            owned_paths=list(finding.suggested_owned_paths or source_task.owned_paths),
+            plan_node_id=plan_node_id or f"{source_task.plan_node_id or source_task.task_id.lower()}-followup",
+            parent_task_id=source_task.task_id,
+            source_task_id=source_task.task_id,
+            source_finding_id=finding.finding_id,
+        )
+        finding.disposition = ReviewFindingDisposition.SPAWNED_FOLLOWUP
+        finding.followup_task_id = followup["task"]["task_id"]
+        finding.updated_at = utc_now()
+        self.review_findings.save(finding)
+        self._emit(
+            source_task.task_id,
+            "advisory_followup_task_created",
+            {
+                "finding_id": finding.finding_id,
+                "followup_task_id": followup["task"]["task_id"],
+            },
+        )
+        self._sync_state_files()
+        return {"ok": True, "task": followup["task"], "finding": self._finding_payload(finding), "errors": []}
 
     def run_self_test(self, task_id: str, workdir: str | None = None) -> dict[str, Any]:
         self._require_project()
@@ -727,7 +1101,7 @@ class DoneGateService:
         self.tasks.save(task)
         self._emit(task.task_id, "task_reopened", {"target_status": target.value, "resulting_status": task.status.value})
         self._sync_state_files()
-        return {"ok": True, "task": task.to_dict(), "events_written": 1, "errors": []}
+        return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": []}
 
     def unblock_task(self, task_id: str, target_status: str) -> dict[str, Any]:
         self._require_project()
@@ -740,13 +1114,14 @@ class DoneGateService:
         self.tasks.save(task)
         self._emit(task.task_id, "task_unblocked", {"target_status": task.status.value})
         self._sync_state_files()
-        return {"ok": True, "task": task.to_dict(), "events_written": 1, "errors": []}
+        return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": []}
 
     def dashboard(self, include_tasks: bool = False, limit: int = 10) -> dict[str, Any]:
         project = self._require_project()
         tasks = self._load_tasks(normalize=True, persist=True)
-        summary = build_dashboard(project.project_name, tasks, limit=limit)
+        advisory_summaries = {task.task_id: self._advisory_summary(task.task_id) for task in tasks}
+        summary = build_dashboard(project.project_name, tasks, advisory_summaries=advisory_summaries, limit=limit)
         payload: dict[str, Any] = {"ok": True, "dashboard": summary.to_dict(), "errors": []}
         if include_tasks:
-            payload["tasks"] = [task.to_dict() for task in tasks[:limit]]
+            payload["tasks"] = [self._task_payload(task) for task in tasks[:limit]]
         return payload
