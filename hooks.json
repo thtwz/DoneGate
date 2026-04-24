@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CODEX_PLUGIN_ROOT}/hooks/donegate-hook.sh session-start"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CODEX_PLUGIN_ROOT}/hooks/donegate-hook.sh stop"
+          }
+        ]
+      }
+    ]
+  }
+}

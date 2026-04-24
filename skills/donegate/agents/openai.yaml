@@ -1,0 +1,8 @@
+interface:
+  display_name: "DoneGate"
+  short_description: "Govern delivery tasks, verification, and docs"
+  brand_color: "#0F766E"
+  default_prompt: "Use $donegate to attach this work to a governed task and record real verification before completion."
+
+policy:
+  allow_implicit_invocation: true

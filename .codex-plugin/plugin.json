@@ -1,0 +1,45 @@
+{
+  "name": "donegate",
+  "version": "0.4.0",
+  "description": "Spec-driven delivery governance for AI-assisted software work through a canonical skill, MCP tools, and thin hooks.",
+  "author": {
+    "name": "DoneGate"
+  },
+  "homepage": "https://github.com/thtwz/DoneGate",
+  "repository": "https://github.com/thtwz/DoneGate",
+  "license": "Apache-2.0",
+  "keywords": [
+    "delivery",
+    "governance",
+    "mcp",
+    "hooks",
+    "skills"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks.json",
+  "mcpServers": {
+    "donegate_mcp": {
+      "command": "${CODEX_PLUGIN_ROOT}/scripts/donegate-mcp-serve-plugin.sh",
+      "args": []
+    }
+  },
+  "interface": {
+    "displayName": "DoneGate",
+    "shortDescription": "Track delivery tasks through specs, verification, docs, and projected lifecycle state.",
+    "longDescription": "DoneGate keeps AI-assisted delivery honest by combining a host skill for workflow doctrine, MCP tools for deterministic state changes, and hooks for lightweight session and git checks.",
+    "developerName": "DoneGate",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/thtwz/DoneGate",
+    "privacyPolicyURL": "https://github.com/thtwz/DoneGate",
+    "termsOfServiceURL": "https://github.com/thtwz/DoneGate",
+    "defaultPrompt": [
+      "Use DoneGate to create, verify, document, and close the current task"
+    ],
+    "brandColor": "#0F766E"
+  }
+}

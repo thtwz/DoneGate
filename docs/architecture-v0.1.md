@@ -44,8 +44,35 @@ tests/
   test_dashboard.py
   test_cli.py
   fixtures.py
+.codex-plugin/
+  plugin.json             # thin Codex plugin manifest
+skills/
+  donegate/
+    SKILL.md              # canonical host operating protocol
+hooks.json                # plugin hook triggers
+hooks/
+  donegate-hook.sh        # non-authoritative session hooks
 pyproject.toml             # deps, console scripts, test config
 ```
+
+## 2.1 Plugin / Skill / MCP Boundary
+
+DoneGate's agent integration has three separate responsibilities:
+
+- Domain/storage is the source of truth. It owns task facts, lifecycle projection, locking, read-model sync, validation, and migration.
+- CLI is the mandatory control plane. Hooks, CI, humans, and agents must be able to complete the workflow through `donegate-mcp` without MCP.
+- Skill is the host operating protocol. It tells the host agent when to create tasks, inspect specs, record verification, record doc sync, reopen work, and refuse conversational completion.
+- MCP is an optional structured agent adapter. Use it when available, but do not make DoneGate depend on MCP to work.
+- Plugin is the host integration shell. It exposes the canonical skill, starts the MCP server, and wires lightweight hooks.
+- Hooks are triggers. They can call CLI/MCP surfaces such as onboarding, supervision, or self-test, but they must not contain independent lifecycle rules.
+
+The dependency direction is intentional:
+
+```text
+plugin manifest/hooks -> skill protocol -> CLI/MCP tools -> domain/storage
+```
+
+If a rule must be enforced, implement it in the domain/CLI/MCP layer first and let hooks call that stable interface. Do not duplicate lifecycle projection or gate policy in plugin hook scripts.
 
 ## 3. State Files on Disk
 Use a single data root inside the project workspace so state is human-readable and commit-optional.

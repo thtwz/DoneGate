@@ -174,7 +174,7 @@ cd /Users/mac/workspace/projects/DoneGate
 /Users/mac/workspace/projects/DoneGate/.venv/bin/pip install -e '.[mcp,test]'
 ```
 
-If you use Hermes skills, load the `donegate-mcp-governor` skill before governed work so the operator flow stays aligned with DoneGate facts instead of chat narration.
+If you use Hermes skills, load the `donegate` skill before governed work so the operator flow stays aligned with DoneGate facts instead of chat narration.
 
 ### Trae / plugin-style MCP clients
 
@@ -196,19 +196,34 @@ For Trae-style plugin configs, point the plugin at the same `donegate-mcp-serve`
 
 ## 8. Codex plugin integration
 
-If you want to expose DoneGate inside Codex as a local plugin, keep the plugin layer thin and point it at the same MCP entrypoint:
+DoneGate ships a repo-local Codex plugin scaffold:
 
-- Register the plugin in `~/.agents/plugins/marketplace.json`
-- Put the plugin manifest at `~/plugins/donegate/.codex-plugin/plugin.json`
-- Set `mcpServers` in that manifest to a relative config path such as `./.mcp.json`
-- Put the actual MCP command in `~/plugins/donegate/.mcp.json`
-- Point that command at the Python environment that has `donegate_mcp` and `mcp` installed
+```text
+.codex-plugin/plugin.json
+skills/donegate/SKILL.md
+hooks.json
+hooks/donegate-hook.sh
+scripts/donegate-mcp-serve-plugin.sh
+scripts/donegate-mcp-cli-plugin.sh
+```
 
-This keeps Codex-specific wiring separate from the delivery-gate core. The plugin should act as a thin adapter over DoneGate's MCP server, not a second implementation of delivery rules.
+The intended architecture is:
+
+- the skill is the operating protocol
+- the CLI is the mandatory control plane
+- MCP tools are an optional structured agent adapter
+- the plugin is the host packaging shell
+- hooks are non-authoritative triggers
+
+The plugin manifest starts `donegate_mcp` through `scripts/donegate-mcp-serve-plugin.sh`. That wrapper prefers the repo `.venv`, then a `donegate-mcp-serve` on `PATH`, then a source checkout through `PYTHONPATH=src`.
+
+For local Codex installation, register this checkout as the plugin source in the Codex/plugin marketplace mechanism you use. The plugin root must be the DoneGate checkout root so `${CODEX_PLUGIN_ROOT}/scripts/donegate-mcp-serve-plugin.sh` resolves correctly.
 
 If Codex runs DoneGate as a shared plugin, prefer launching Codex from a shell that already sourced `.donegate-mcp/env.sh` in the target repository. That file exports `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`, which allow the shared MCP process to default to the supervised repository instead of the plugin checkout.
 
 If the host process cannot inherit that environment, pass `repo_root` explicitly in DoneGate tool calls.
+
+The plugin hook file only runs lightweight `onboarding` / `supervision` probes. It must not become a second implementation of lifecycle rules; enforcement belongs in DoneGate domain/CLI/MCP code.
 
 ## 9. Operational note
 

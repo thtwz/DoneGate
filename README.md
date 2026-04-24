@@ -67,6 +67,7 @@ DoneGate is intentionally not trying to be:
 - [Release checklist](docs/release-checklist.md)
 - [v0.4.0 release notes](docs/release-notes-v0.4.0.md)
 - [Hermes example config](examples/hermes-mcp-config.yaml)
+- [Codex plugin integration](docs/startup-guide.md#8-codex-plugin-integration)
 
 ## Human Quick Start
 
@@ -179,6 +180,17 @@ donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks
 ```
 
 MCP hosts get the same surface through `task_review`, `review_list`, `review_disposition`, and `task_create_from_finding`. In Codex, the recommended pattern is for the DoneGate skill to inspect pending advisory requests, run an architect-style review in the host, and call the MCP tool to record normalized findings.
+
+## Plugin / Skill / MCP Integration
+
+DoneGate's host integration is intentionally layered:
+
+- the canonical skill in `skills/donegate/` is the operating protocol
+- MCP tools are the deterministic execution surface
+- `.codex-plugin/plugin.json` packages the skill, MCP server, and hook triggers for Codex-style hosts
+- hooks are lightweight triggers over CLI/MCP surfaces, not a second implementation of lifecycle policy
+
+This keeps delivery doctrine in one skill and enforcement in one domain model while still allowing Codex, Hermes, and other MCP clients to share the same governed state.
 
 ## LLM / Agent Quickstart From Git URL
 
