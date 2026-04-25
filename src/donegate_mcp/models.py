@@ -263,8 +263,10 @@ class DashboardSummary:
     next_actions: list[dict[str, Any]]
     open_advisories: int = 0
     high_severity_advisories: int = 0
+    followup_spawned_advisories: int = 0
     pending_advisory_reviews: int = 0
     tasks_with_open_advisories: list[dict[str, Any]] = field(default_factory=list)
+    tasks_with_pending_reviews: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -321,6 +323,8 @@ class ReviewRun:
     provider_id: str
     status: ReviewRunStatus
     source_task_updated_at: str
+    requested_provider_id: str | None = None
+    completed_provider_id: str | None = None
     summary: str = ""
     overall_recommendation: ReviewRecommendation = ReviewRecommendation.PROCEED
     request_hint: str | None = None
@@ -341,6 +345,8 @@ class ReviewRun:
         payload["checkpoint"] = ReviewCheckpoint(payload["checkpoint"])
         payload["status"] = ReviewRunStatus(payload["status"])
         payload["overall_recommendation"] = ReviewRecommendation(payload["overall_recommendation"])
+        payload.setdefault("requested_provider_id", payload.get("provider_id"))
+        payload.setdefault("completed_provider_id", payload.get("provider_id") if payload["status"] == ReviewRunStatus.COMPLETED else None)
         payload.setdefault("summary", "")
         payload.setdefault("request_hint", None)
         payload.setdefault("finding_ids", [])

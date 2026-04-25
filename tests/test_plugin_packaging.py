@@ -19,6 +19,7 @@ def test_codex_plugin_manifest_exposes_skill_mcp_and_hooks() -> None:
 
 def test_plugin_hooks_are_thin_triggers() -> None:
     hooks = json.loads((ROOT / "hooks.json").read_text(encoding="utf-8"))
+    hook_script = (ROOT / "hooks" / "donegate-hook.sh").read_text(encoding="utf-8")
     commands = [
         hook["command"]
         for event_hooks in hooks["hooks"].values()
@@ -28,7 +29,8 @@ def test_plugin_hooks_are_thin_triggers() -> None:
 
     assert commands
     assert all("hooks/donegate-hook.sh" in command for command in commands)
-    assert "task_transition" not in (ROOT / "hooks" / "donegate-hook.sh").read_text(encoding="utf-8")
+    assert "task_transition" not in hook_script
+    assert "DoneGate advisory attention" in hook_script
 
 
 def test_plugin_scripts_are_executable() -> None:

@@ -20,7 +20,21 @@ case "$EVENT" in
     "$CLI" --data-root "$ROOT/.donegate-mcp" --json onboarding --repo-root "$ROOT" --agent codex >/dev/null 2>&1 || true
     ;;
   stop)
-    "$CLI" --data-root "$ROOT/.donegate-mcp" --json supervision --repo-root "$ROOT" >/dev/null 2>&1 || true
+    SUPERVISION_JSON="$("$CLI" --data-root "$ROOT/.donegate-mcp" --json supervision --repo-root "$ROOT" 2>/dev/null || true)"
+    if [ -n "$SUPERVISION_JSON" ]; then
+      printf '%s' "$SUPERVISION_JSON" | python3 -c 'import json, sys
+try:
+    payload = json.loads(sys.stdin.read())
+except Exception:
+    raise SystemExit(0)
+supervision = payload.get("supervision") or {}
+summary = supervision.get("advisory_summary") or {}
+pending = int(summary.get("pending_reviews") or 0)
+open_count = int(summary.get("open_advisories") or 0)
+if pending or open_count:
+    print(f"DoneGate advisory attention: pending_reviews={pending} open_advisories={open_count}", file=sys.stderr)
+' || true
+    fi
     ;;
 esac
 

@@ -287,14 +287,16 @@ class DoneGateService:
     def _advisory_summary(self, task_id: str) -> dict[str, Any]:
         runs = self._list_review_runs(task_id=task_id)
         findings = self._list_review_findings(task_id=task_id)
-        open_findings = [finding for finding in findings if finding.disposition in {ReviewFindingDisposition.OPEN, ReviewFindingDisposition.ACCEPTED, ReviewFindingDisposition.SPAWNED_FOLLOWUP}]
+        open_findings = [finding for finding in findings if finding.disposition in {ReviewFindingDisposition.OPEN, ReviewFindingDisposition.ACCEPTED}]
         high_findings = [finding for finding in open_findings if finding.severity == ReviewFindingSeverity.HIGH]
+        followup_spawned_findings = [finding for finding in findings if finding.disposition == ReviewFindingDisposition.SPAWNED_FOLLOWUP]
         pending_runs = [run for run in runs if run.status == ReviewRunStatus.REQUESTED]
         completed_runs = [run for run in runs if run.status == ReviewRunStatus.COMPLETED]
         latest_completed = completed_runs[-1] if completed_runs else None
         return {
             "open_advisories": len(open_findings),
             "high_severity_advisories": len(high_findings),
+            "followup_spawned_advisories": len(followup_spawned_findings),
             "pending_reviews": len(pending_runs),
             "last_reviewed_at": latest_completed.updated_at if latest_completed else None,
             "last_review_recommendation": latest_completed.overall_recommendation.value if latest_completed else None,
@@ -359,14 +361,25 @@ class DoneGateService:
         checkpoint: ReviewCheckpoint,
         provider_id: str = "host_skill",
     ) -> ReviewRun | None:
+        provider = get_review_provider(provider_id)
+        pending = [
+            run
+            for run in self._list_review_runs(
+                task_id=task.task_id,
+                checkpoint=checkpoint,
+                status=ReviewRunStatus.REQUESTED,
+            )
+            if (run.requested_provider_id or run.provider_id) == provider.provider_id
+        ]
+        if pending:
+            return pending[-1]
         existing = [
             run
             for run in self._list_review_runs(task_id=task.task_id, checkpoint=checkpoint)
-            if run.source_task_updated_at == task.updated_at
+            if (run.requested_provider_id or run.provider_id) == provider.provider_id and run.source_task_updated_at == task.updated_at
         ]
         if existing:
             return existing[-1]
-        provider = get_review_provider(provider_id)
         review_run = ReviewRun(
             review_run_id=self._review_run_id(),
             task_id=task.task_id,
@@ -374,6 +387,7 @@ class DoneGateService:
             provider_id=provider.provider_id,
             status=ReviewRunStatus.REQUESTED,
             source_task_updated_at=task.updated_at,
+            requested_provider_id=provider.provider_id,
             request_hint=provider.build_request_hint(task, checkpoint),
             overall_recommendation=ReviewRecommendation.NEEDS_HUMAN_ATTENTION,
         )
@@ -723,6 +737,7 @@ class DoneGateService:
             "advisory_summary": self._advisory_summary(active_task.task_id) if active_task else {
                 "open_advisories": 0,
                 "high_severity_advisories": 0,
+                "followup_spawned_advisories": 0,
                 "pending_reviews": 0,
                 "last_reviewed_at": None,
                 "last_review_recommendation": None,
@@ -748,6 +763,7 @@ class DoneGateService:
         self._require_project()
         task = self.tasks.load(task_id)
         target = self._normalize_task_status(target_status)
+        previous_status = task.status
         warnings: list[str] = []
         warning = compatibility_warning(target)
         if warning:
@@ -760,9 +776,9 @@ class DoneGateService:
             task = apply_transition(task, target)
         self.tasks.save(task)
         self._emit(task.task_id, "status_changed", {"target_status": task.status.value, "reason": reason, "notes": notes})
-        if target == TaskStatus.AWAITING_VERIFICATION:
+        if target == TaskStatus.AWAITING_VERIFICATION and previous_status != TaskStatus.AWAITING_VERIFICATION:
             self._ensure_advisory_review_request(task, ReviewCheckpoint.SUBMIT)
-        elif target == TaskStatus.DONE:
+        elif target == TaskStatus.DONE and previous_status != TaskStatus.DONE:
             self._ensure_advisory_review_request(task, ReviewCheckpoint.PRE_DONE)
         self._sync_state_files()
         return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": [], "warnings": warnings}
@@ -841,7 +857,7 @@ class DoneGateService:
                 run
                 for run in self._list_review_runs(task_id=task_id, checkpoint=checkpoint_enum, status=ReviewRunStatus.REQUESTED)
             ]
-            same_provider_pending = [run for run in pending if run.provider_id == provider.provider_id]
+            same_provider_pending = [run for run in pending if (run.requested_provider_id or run.provider_id) == provider.provider_id]
             review_run = (same_provider_pending or pending)[-1] if pending else ReviewRun(
                 review_run_id=self._review_run_id(),
                 task_id=task_id,
@@ -849,10 +865,14 @@ class DoneGateService:
                 provider_id=provider.provider_id,
                 status=ReviewRunStatus.REQUESTED,
                 source_task_updated_at=task.updated_at,
+                requested_provider_id=provider.provider_id,
                 request_hint=provider.build_request_hint(task, checkpoint_enum),
             )
 
+        if review_run.requested_provider_id is None:
+            review_run.requested_provider_id = review_run.provider_id
         review_run.provider_id = provider.provider_id
+        review_run.completed_provider_id = provider.provider_id
         review_run.status = ReviewRunStatus.COMPLETED
         review_run.summary = normalized.summary
         review_run.overall_recommendation = recommendation

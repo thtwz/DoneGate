@@ -55,6 +55,63 @@ def test_submit_and_done_create_advisory_review_requests(tmp_path) -> None:
     assert {run["checkpoint"] for run in review_payload["reviews"]} == {"submit", "pre_done"}
 
 
+def test_repeated_submit_and_done_do_not_duplicate_advisory_review_requests(tmp_path) -> None:
+    root = tmp_path / ".donegate-mcp"
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "spec.md").write_text("v1\n", encoding="utf-8")
+
+    service = DoneGateService(root)
+    service.init_project("demo", repo_root=str(tmp_path))
+    task_id = service.create_task("Gate task", "docs/spec.md")["task"]["task_id"]
+
+    service.transition_task(task_id, "ready")
+    service.transition_task(task_id, "in_progress")
+    service.transition_task(task_id, "awaiting_verification")
+    service.transition_task(task_id, "awaiting_verification")
+
+    submit_reviews = service.list_reviews(task_id=task_id, checkpoint="submit")["reviews"]
+    assert len(submit_reviews) == 1
+
+    service.record_verification(task_id, "passed", ref="reports/pytest.txt")
+    service.record_doc_sync(task_id, "synced", ref=str((docs / "spec.md").resolve()))
+    service.transition_task(task_id, "done")
+    service.transition_task(task_id, "done")
+
+    pre_done_reviews = service.list_reviews(task_id=task_id, checkpoint="pre_done")["reviews"]
+    assert len(pre_done_reviews) == 1
+
+
+def test_review_run_preserves_requested_and_completed_provider_audit(tmp_path) -> None:
+    root = tmp_path / ".donegate-mcp"
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "spec.md").write_text("v1\n", encoding="utf-8")
+
+    service = DoneGateService(root)
+    service.init_project("demo", repo_root=str(tmp_path))
+    task_id = service.create_task("Gate task", "docs/spec.md")["task"]["task_id"]
+    service.transition_task(task_id, "ready")
+    service.transition_task(task_id, "awaiting_verification")
+
+    requested = service.list_reviews(task_id=task_id, checkpoint="submit")["reviews"][0]
+    assert requested["provider_id"] == "host_skill"
+    assert requested["requested_provider_id"] == "host_skill"
+    assert requested["completed_provider_id"] is None
+
+    reviewed = service.record_task_review(
+        task_id,
+        checkpoint="submit",
+        provider_id="manual",
+        review_run_id=requested["review_run_id"],
+        summary="Manual reviewer completed a host-skill requested review.",
+    )
+
+    assert reviewed["review"]["provider_id"] == "manual"
+    assert reviewed["review"]["requested_provider_id"] == "host_skill"
+    assert reviewed["review"]["completed_provider_id"] == "manual"
+
+
 def test_record_review_and_spawn_followup_task_updates_dashboard_and_supervision(tmp_path) -> None:
     repo = tmp_path / "repo"
     docs = repo / "docs"
@@ -106,14 +163,16 @@ def test_record_review_and_spawn_followup_task_updates_dashboard_and_supervision
     assert followup["task"]["parent_task_id"] == task_id
 
     dashboard = service.dashboard(include_tasks=True)
-    assert dashboard["dashboard"]["open_advisories"] == 1
-    assert dashboard["dashboard"]["high_severity_advisories"] == 1
-    assert dashboard["dashboard"]["tasks_with_open_advisories"][0]["task_id"] == task_id
+    assert dashboard["dashboard"]["open_advisories"] == 0
+    assert dashboard["dashboard"]["high_severity_advisories"] == 0
+    assert dashboard["dashboard"]["followup_spawned_advisories"] == 1
+    assert dashboard["dashboard"]["tasks_with_open_advisories"] == []
 
     supervision = service.get_supervision(repo_root=repo)
-    assert supervision["supervision"]["advisory_summary"]["open_advisories"] == 1
-    assert supervision["supervision"]["advisory_summary"]["high_severity_advisories"] == 1
-    assert supervision["supervision"]["active_task"]["advisory_summary"]["open_advisories"] == 1
+    assert supervision["supervision"]["advisory_summary"]["open_advisories"] == 0
+    assert supervision["supervision"]["advisory_summary"]["high_severity_advisories"] == 0
+    assert supervision["supervision"]["advisory_summary"]["followup_spawned_advisories"] == 1
+    assert supervision["supervision"]["active_task"]["advisory_summary"]["open_advisories"] == 0
 
     findings = service.list_reviews(task_id=task_id, include_findings=True)["findings"]
     assert findings[0]["disposition"] == "spawned_followup"

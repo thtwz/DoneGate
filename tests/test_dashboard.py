@@ -33,3 +33,24 @@ def test_dashboard_prioritizes_blocked_then_verification_then_docs_then_ready() 
         "TASK-0003",
         "TASK-0004",
     ]
+
+
+def test_dashboard_lists_tasks_with_pending_advisory_reviews() -> None:
+    task = make_task("TASK-0001", TaskStatus.AWAITING_VERIFICATION, "verify")
+
+    summary = build_dashboard(
+        "demo",
+        [task],
+        advisory_summaries={
+            "TASK-0001": {
+                "open_advisories": 0,
+                "high_severity_advisories": 0,
+                "followup_spawned_advisories": 0,
+                "pending_reviews": 1,
+            }
+        },
+    )
+
+    assert summary.pending_advisory_reviews == 1
+    assert summary.tasks_with_pending_reviews[0]["task_id"] == "TASK-0001"
+    assert summary.tasks_with_pending_reviews[0]["pending_reviews"] == 1

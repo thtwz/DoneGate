@@ -154,7 +154,7 @@ This layer is intentionally advisory:
 - it records architect-style findings as explicit state
 - it can convert findings into follow-up tasks
 
-Advisory review requests are created automatically when a task is submitted for verification and again before it reaches `done`.
+Advisory review requests are created automatically when a task first crosses into submitted-for-verification and again before it reaches `done`. Re-running the same lifecycle command does not create duplicate pending requests.
 
 ```bash
 donegate-mcp --data-root .donegate-mcp task submit TASK-0001
@@ -178,6 +178,12 @@ Then turn a useful finding into tracked work:
 donegate-mcp --data-root .donegate-mcp --json task create-from-finding FINDING-1234abcd
 donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks
 ```
+
+Findings converted into follow-up tasks move out of the open advisory count and are tracked separately as spawned follow-ups.
+
+Dashboard output also lists tasks with pending advisory reviews, so agents and humans can see which requested reviews still need host-side attention. Plugin `Stop` hooks surface a lightweight advisory reminder when pending reviews or open advisory findings remain.
+
+Review runs preserve both the requested provider and the completed provider. The compatibility `provider_id` field still reflects the provider that completed the review, while `requested_provider_id` records who was originally asked to review.
 
 MCP hosts get the same surface through `task_review`, `review_list`, `review_disposition`, and `task_create_from_finding`. In Codex, the recommended pattern is for the DoneGate skill to inspect pending advisory requests, run an architect-style review in the host, and call the MCP tool to record normalized findings.
 

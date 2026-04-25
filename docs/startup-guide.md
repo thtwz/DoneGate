@@ -122,7 +122,7 @@ The response includes the current branch, any branch-bound active task, the gene
 
 Advisory review helps agents catch outcome gaps that can pass verification while still missing the real user need. It is advisory in v0.4: findings do not block `done`, but they stay visible and can be converted into follow-up tasks.
 
-DoneGate creates review requests when a task is submitted for verification and again before completion:
+DoneGate creates review requests when a task first enters submitted-for-verification and again before completion. Re-running the same lifecycle command reuses the existing pending request instead of adding duplicates:
 
 ```bash
 donegate-mcp --data-root .donegate-mcp task submit TASK-0001
@@ -146,6 +146,12 @@ Create tracked follow-up work from the finding:
 donegate-mcp --data-root .donegate-mcp --json task create-from-finding FINDING-1234abcd
 donegate-mcp --data-root .donegate-mcp --json review disposition FINDING-1234abcd --to accepted
 ```
+
+Once a finding is converted into a follow-up task, it is counted separately from open advisories so the dashboard shows unresolved advisory work distinctly from tracked follow-up work.
+
+The dashboard includes `tasks_with_pending_reviews` for requested reviews that still need host-side attention. The Codex plugin `Stop` hook also prints a concise advisory reminder when pending reviews or open advisory findings remain; it does not perform review logic itself.
+
+Review run payloads include provider audit fields. `provider_id` remains the compatibility field for the provider that completed the review, while `requested_provider_id` and `completed_provider_id` preserve request and completion provenance separately.
 
 MCP clients should use the matching tools: `task_review`, `review_list`, `review_disposition`, and `task_create_from_finding`.
 
