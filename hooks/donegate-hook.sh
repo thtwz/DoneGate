@@ -4,7 +4,7 @@ set -euo pipefail
 EVENT="${1:-session-start}"
 PLUGIN_ROOT="${CODEX_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 CLI="${DONEGATE_MCP_CLI:-$PLUGIN_ROOT/scripts/donegate-mcp-cli-plugin.sh}"
-WORKDIR="${DONEGATE_MCP_WORKDIR:-$(pwd)}"
+WORKDIR="$(pwd)"
 
 git_root() {
   git -C "$WORKDIR" rev-parse --show-toplevel 2>/dev/null || true

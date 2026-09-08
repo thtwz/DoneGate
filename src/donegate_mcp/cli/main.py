@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from donegate_mcp.cli.formatters import render
+from donegate_mcp.compact import compact_payload
 from donegate_mcp.domain.services import DoneGateService
 from donegate_mcp.errors import DoneGateMcpError, TransitionError, ValidationError
 
@@ -32,19 +33,21 @@ def _json_object_list(values: list[str]) -> list[dict]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="donegate-mcp")
     parser.add_argument("--data-root", default=None)
+    parser.add_argument("--repo-root", dest="global_repo_root", default=None)
+    parser.add_argument("--compact", action="store_true", help="omit verbose task details from responses")
     parser.add_argument("--json", action="store_true", dest="as_json")
     sub = parser.add_subparsers(dest="command", required=True)
 
     bootstrap_p = sub.add_parser("bootstrap")
     bootstrap_p.add_argument("--project-name", required=True)
-    bootstrap_p.add_argument("--repo-root", default=".")
+    bootstrap_p.add_argument("--repo-root")
     bootstrap_p.add_argument("--default-branch")
 
     supervision_p = sub.add_parser("supervision")
-    supervision_p.add_argument("--repo-root", default=".")
+    supervision_p.add_argument("--repo-root")
 
     onboarding_p = sub.add_parser("onboarding")
-    onboarding_p.add_argument("--repo-root", default=".")
+    onboarding_p.add_argument("--repo-root")
     onboarding_p.add_argument("--agent", choices=["codex", "hermes"], default="codex")
 
     init_p = sub.add_parser("init")
@@ -55,6 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
     dash_p = sub.add_parser("dashboard")
     dash_p.add_argument("--include-tasks", action="store_true")
     dash_p.add_argument("--limit", type=int, default=10)
+
+    context_p = sub.add_parser("context", help="focused repository and active task context")
+    context_p.add_argument("--repo-root")
 
     sub.add_parser("plan")
     sub.add_parser("progress")
@@ -105,6 +111,9 @@ def build_parser() -> argparse.ArgumentParser:
     list_p = task_sub.add_parser("list")
     list_p.add_argument("--status")
     list_p.add_argument("--limit", type=int)
+
+    show = task_sub.add_parser("show", help="full task acceptance details")
+    show.add_argument("task_id")
 
     activate = task_sub.add_parser("activate")
     activate.add_argument("task_id")
@@ -166,6 +175,9 @@ def build_parser() -> argparse.ArgumentParser:
     create_from_finding.add_argument("--summary")
     create_from_finding.add_argument("--plan-node-id")
 
+    check = task_sub.add_parser("check", help="reuse current verification or run configured self-test")
+    check.add_argument("task_id")
+
     self_test = task_sub.add_parser("self-test")
     self_test.add_argument("task_id")
     self_test.add_argument("--workdir")
@@ -183,8 +195,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    service = DoneGateService(data_root=_resolve_service_root(args))
     try:
+        local_repo = getattr(args, "repo_root", None)
+        if args.global_repo_root and local_repo and Path(args.global_repo_root).resolve() != Path(local_repo).resolve():
+            raise ValidationError("conflicting global and subcommand repo_root")
+        args.repo_root = args.global_repo_root or local_repo
+        if args.repo_root is None and (args.data_root is None or args.command == "bootstrap"):
+            args.repo_root = str(Path.cwd())
+        service = DoneGateService(data_root=_resolve_service_root(args), repo_root=args.repo_root)
         if args.command == "bootstrap":
             payload = service.bootstrap_repository(args.project_name, repo_root=args.repo_root, default_branch=args.default_branch)
         elif args.command == "onboarding":
@@ -193,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = service.get_supervision(repo_root=args.repo_root)
         elif args.command == "init":
             payload = service.init_project(args.project_name, default_branch=args.default_branch, repo_root=args.repo_root)
+        elif args.command == "context":
+            payload = service.get_context(repo_root=args.repo_root)
         elif args.command == "dashboard":
             payload = service.dashboard(include_tasks=args.include_tasks, limit=args.limit)
         elif args.command == "plan":
@@ -209,7 +229,9 @@ def main(argv: list[str] | None = None) -> int:
             payload = _run_task_command(service, args)
         else:
             raise ValidationError(f"unknown command {args.command}")
-        print(render(payload, args.as_json))
+        print(render(compact_payload(payload) if args.compact else payload, args.as_json))
+        if args.command == "task" and args.task_command in {"self-test", "check"}:
+            return 1 if payload.get("exit_code", 0) != 0 else 0
         return 0
     except TransitionError as exc:
         print(render({"ok": False, "errors": [str(exc)]}, args.as_json))
@@ -223,16 +245,21 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _resolve_service_root(args: argparse.Namespace) -> str | None:
-    if args.command != "bootstrap" or args.data_root is not None:
+    if args.data_root is not None:
         return args.data_root
-    repo_root = Path(args.repo_root).resolve()
-    return str(repo_root / ".donegate-mcp")
+    if args.repo_root is not None:
+        return str(Path(args.repo_root).resolve() / ".donegate-mcp")
+    return None
 
 
 def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dict:
     cmd = args.task_command
     if cmd == "create":
         return service.create_task(args.title, args.spec_ref, summary=args.summary, verification_mode=args.verification_mode, test_commands=args.test_commands, required_doc_refs=args.required_doc_refs, required_artifacts=args.required_artifacts, owned_paths=args.owned_paths, plan_node_id=args.plan_node_id)
+    if cmd == "check":
+        return service.ensure_verification(args.task_id)
+    if cmd == "show":
+        return service.get_task(args.task_id)
     if cmd == "list":
         return service.list_tasks(status=args.status, limit=args.limit)
     if cmd == "activate":

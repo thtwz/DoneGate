@@ -60,3 +60,11 @@ TOOLS = {
         **_TARGET_CONTEXT,
     },
 }
+
+TOOLS.update({
+    "project_context": {**_TARGET_CONTEXT},
+    "task_get": {"task_id": "str", **_TARGET_CONTEXT},
+    "task_activate": {"task_id": "str", "compact": "bool?", **_TARGET_CONTEXT},
+})
+for _name in ['task_block', 'task_create', 'task_create_from_finding', 'task_record_doc_sync', 'task_record_verification', 'task_reopen', 'task_review', 'task_run_self_test', 'task_transition', 'task_unblock', 'task_update_acceptance_protocol']:
+    TOOLS[_name]["compact"] = "bool?"

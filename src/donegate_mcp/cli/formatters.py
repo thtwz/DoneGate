@@ -9,6 +9,11 @@ def render(payload: dict[str, Any], as_json: bool) -> str:
         return json.dumps(payload, indent=2, sort_keys=True)
     if not payload.get("ok", False):
         return "ERROR: " + "; ".join(payload.get("errors", ["unknown error"]))
+    if "context" in payload:
+        context = payload["context"]
+        active = context.get("active_task")
+        task = f"{active['task_id']} {active['status']}" if active else "no active task"
+        return f"{context['repo_root']} [{context.get('branch') or 'detached'}]: {task}\n{context['status']}: {context['next_action']}"
     if "review" in payload:
         review = payload["review"]
         return f"{review['review_run_id']} {review['status']} {review['checkpoint']}"

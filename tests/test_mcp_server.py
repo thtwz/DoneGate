@@ -114,3 +114,20 @@ def test_mcp_tool_schema_exposes_review_and_reopen_tools() -> None:
     assert "review_list" in TOOLS
     assert "review_disposition" in TOOLS
     assert "task_create_from_finding" in TOOLS
+
+
+def test_mcp_initialize_uses_package_version(monkeypatch):
+    import sys
+    import types
+    from donegate_mcp import __version__
+
+    class FakeFastMCP(SimpleToolServer):
+        def __init__(self, name):
+            super().__init__()
+            self._mcp_server = types.SimpleNamespace(version='old-default')
+
+    fake_module = types.ModuleType('mcp.server.fastmcp')
+    fake_module.FastMCP = FakeFastMCP
+    monkeypatch.setitem(sys.modules, 'mcp.server.fastmcp', fake_module)
+    app = DoneGateMcpApp()
+    assert app.server._mcp_server.version == __version__

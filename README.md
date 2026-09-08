@@ -69,6 +69,27 @@ DoneGate is intentionally not trying to be:
 - [Hermes example config](examples/hermes-mcp-config.yaml)
 - [Codex plugin integration](docs/startup-guide.md#8-codex-plugin-integration)
 
+## Codex Plugin
+
+The canonical skill is `skills/donegate/SKILL.md`. The plugin manifest and `.mcp.json`
+start the same MCP server through `scripts/donegate-mcp-serve-plugin.sh`.
+Install the package in its runtime with `pip install -e ".[mcp]"`.
+
+A shared MCP server is intentionally unbound. Pass the target worktree's absolute
+`repo_root` on **every call**. Do not configure one project's data directory in a
+shared server or reuse task IDs across projects. An explicit repository overrides
+inherited defaults; conflicting data ownership produces an error.
+
+For ordinary work, use `project_context`, `task_get`, and `task_activate`. Set
+`compact: true` on mutation calls to return only useful delivery facts. Use the
+full dashboard for project overviews, not on every turn. The CLI equivalent is:
+
+```bash
+donegate-mcp --repo-root /absolute/project --json context
+```
+
+See [0.4.1 changes](CHANGELOG.md) and the [operating reference](skills/donegate/references/operations.md).
+
 ## Human Quick Start
 
 ### 1. Install DoneGate
@@ -241,9 +262,9 @@ An LLM integrating DoneGate should follow this sequence:
 
 1. Clone and install DoneGate from this repository.
 2. Run `donegate-mcp bootstrap --project-name ... --repo-root .` inside the target repository.
-3. Read `donegate-mcp --json onboarding --repo-root . --agent <codex|hermes>`.
+3. Read `donegate-mcp --json context` once when entering the target repository.
 4. Ensure a branch-scoped active task exists before editing code.
-5. Use `donegate-mcp --json supervision --repo-root .` before commits or pushes.
+5. Refresh `donegate-mcp --json context` before commits or pushes.
 6. Record verification and doc sync before calling a task done.
 7. Inspect advisory reviews before closing substantial work, and convert accepted outcome gaps into follow-up tasks.
 
@@ -271,6 +292,7 @@ Current policy behavior:
 - `pre-commit` blocks on `needs_task`, `task_mismatch`, and `needs_revalidation`
 - `pre-commit` warns on `stale_verification` and `stale_docs`
 - `pre-push` blocks on any status stronger than `tracked`
+- hooks reuse current recorded verification; stale automated evidence reruns configured checks, while missing manual evidence requires actual acceptance
 
 ### Hermes MCP
 
@@ -282,15 +304,10 @@ The repository-local onboarding asset is the preferred source because it is gene
 
 ### Codex Plugin
 
-DoneGate can also be exposed to Codex as a local plugin. The plugin layer should stay thin and point at the same MCP server, not reimplement delivery rules.
-
-When Codex launches DoneGate as a shared plugin, make sure the Codex process inherits the repo-local environment from `.donegate-mcp/env.sh`. That file exports `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`, which let shared MCP sessions target the supervised repository instead of the plugin installation checkout.
-
-If the host cannot inherit that environment, MCP calls should pass `repo_root` explicitly.
-
-See:
-- [Startup guide](docs/startup-guide.md)
-- `.donegate-mcp/onboarding/codex.md`
+Keep a shared plugin unbound and pass absolute `repo_root` per tool call. Repo-local
+`.donegate-mcp/env.sh` is for a deliberately bound CLI or project-specific server;
+do not source it globally into a host serving several projects. Ownership is
+validated before mutation. See the [startup guide](docs/startup-guide.md).
 
 ## Acceptance guidance from real usage
 

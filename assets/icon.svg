@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="DoneGate">
+  <rect width="512" height="512" rx="96" fill="#2563EB"/>
+  <path d="M144 242c0-61 50-111 112-111s112 50 112 111v34h-54v-34c0-31-26-57-58-57s-58 26-58 57v34h-54z" fill="#DBEAFE"/>
+  <rect x="105" y="248" width="302" height="154" rx="36" fill="#FFFFFF"/>
+  <path d="m207 323 34 34 74-83" fill="none" stroke="#16A34A" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

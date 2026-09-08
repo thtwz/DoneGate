@@ -47,10 +47,11 @@ def test_canonical_skill_documents_layer_boundary() -> None:
     metadata = (ROOT / "skills" / "donegate" / "agents" / "openai.yaml").read_text(encoding="utf-8")
 
     assert "name: donegate" in skill
-    assert "Skill is the host operating protocol" in skill
-    assert "CLI is the mandatory control plane" in skill
-    assert "MCP is an optional structured agent adapter" in skill
-    assert "Plugin is the host packaging shell" in skill
-    assert "Hooks are triggers" in skill
+    # The entrypoint stays small; optional operation details remain available.
+    assert len(skill) < 3500
+    import re
+    references = re.findall(r"\]\((references/[^)]+)\)", skill)
+    assert references
+    assert all((ROOT / "skills" / "donegate" / ref).is_file() for ref in references)
     assert 'default_prompt: "Use $donegate' in metadata
     assert "allow_implicit_invocation: true" in metadata

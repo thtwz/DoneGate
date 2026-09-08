@@ -109,6 +109,7 @@ class Task:
     verification_status: VerificationStatus = VerificationStatus.UNKNOWN
     doc_sync_status: DocSyncStatus = DocSyncStatus.UNKNOWN
     last_verification_ref: str | None = None
+    verification_input_hash: str | None = None
     last_doc_sync_ref: str | None = None
     verification_mode: str = "manual"
     test_commands: list[str] = field(default_factory=list)
@@ -323,6 +324,7 @@ class ReviewRun:
     provider_id: str
     status: ReviewRunStatus
     source_task_updated_at: str
+    source_input_hash: str | None = None
     requested_provider_id: str | None = None
     completed_provider_id: str | None = None
     summary: str = ""

@@ -41,4 +41,4 @@ print(f"{action}:{status}")')
     printf 'DoneGate %s warning: %s\n' "$STAGE" "$STATUS" >&2
   fi
 fi
-PYTHONPATH=${PYTHONPATH:-src} python3 -m donegate_mcp.cli.main --data-root "$ROOT" --json task self-test "$TASK_ID" --workdir "$WORKDIR" >/tmp/donegate-mcp-self-test.json
+PYTHONPATH=${PYTHONPATH:-src} python3 -m donegate_mcp.cli.main --data-root "$ROOT" --json task check "$TASK_ID" >/dev/null

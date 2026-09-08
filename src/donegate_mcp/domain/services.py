@@ -11,7 +11,10 @@ from uuid import uuid4
 from typing import Any, Callable, TypeVar, cast
 
 from donegate_mcp.config import DEVIATIONS_FILENAME, SCHEMA_VERSION, resolve_data_root
-from donegate_mcp.errors import ValidationError
+from donegate_mcp.errors import ValidationError, TransitionError
+from donegate_mcp.context import validate_project_owner
+from donegate_mcp.compact import compact_payload
+from donegate_mcp.domain.evidence import input_snapshot
 from donegate_mcp.domain.review_providers import get_review_provider
 from donegate_mcp.models import (
     DocSyncRecord,
@@ -34,7 +37,7 @@ from donegate_mcp.models import (
     utc_now,
 )
 from donegate_mcp.domain.dashboard import build_dashboard
-from donegate_mcp.domain.lifecycle import apply_block, apply_doc_sync, apply_transition, apply_verification, compatibility_warning, normalize_task
+from donegate_mcp.domain.lifecycle import require_transition, apply_block, apply_doc_sync, apply_transition, apply_verification, compatibility_warning, normalize_task
 from donegate_mcp.domain.read_models import ReadModelProjector
 from donegate_mcp.storage.event_store import EventStore
 from donegate_mcp.storage.fs import append_jsonl, ensure_dir, make_executable, write_text
@@ -63,8 +66,10 @@ def _with_write_lock(func: _F) -> _F:
 
 
 class DoneGateService:
-    def __init__(self, data_root: str | Path | None = None) -> None:
-        self.data_root = resolve_data_root(data_root)
+    def __init__(self, data_root: str | Path | None = None, repo_root: str | Path | None = None) -> None:
+        self.data_root = resolve_data_root(data_root).resolve()
+        self.repo_root = Path(repo_root).resolve() if repo_root is not None else None
+        validate_project_owner(self.data_root, self.repo_root)
         ensure_dir(self.data_root)
         self.projects = ProjectStore(self.data_root)
         self.tasks = TaskStore(self.data_root)
@@ -93,6 +98,7 @@ class DoneGateService:
     def _require_project(self) -> ProjectState:
         if not self.projects.exists():
             raise ValidationError(f"project not initialized at {self.data_root}")
+        validate_project_owner(self.data_root, self.repo_root)
         return self.projects.load()
 
     def _emit(self, task_id: str, event_type: str, payload: dict[str, Any], actor: str = "system") -> TaskEvent:
@@ -203,7 +209,7 @@ class DoneGateService:
     def _path_matches_owned_path(path: str, owned_path: str) -> bool:
         normalized_path = path.replace("\\", "/").strip("/")
         normalized_scope = owned_path.replace("\\", "/").strip("/")
-        if not normalized_scope:
+        if normalized_scope in ("", "."):
             return True
         if any(char in normalized_scope for char in "*?[]"):
             return PurePosixPath(normalized_path).match(normalized_scope)
@@ -362,6 +368,14 @@ class DoneGateService:
         provider_id: str = "host_skill",
     ) -> ReviewRun | None:
         provider = get_review_provider(provider_id)
+        snapshot = self._input_snapshot(task)
+        if snapshot is not None:
+            completed = [run for run in self._list_review_runs(task_id=task.task_id)
+                         if run.status == ReviewRunStatus.COMPLETED
+                         and run.source_input_hash == snapshot
+                         and (run.requested_provider_id or run.provider_id) == provider.provider_id]
+            if completed:
+                return completed[-1]
         pending = [
             run
             for run in self._list_review_runs(
@@ -387,6 +401,7 @@ class DoneGateService:
             provider_id=provider.provider_id,
             status=ReviewRunStatus.REQUESTED,
             source_task_updated_at=task.updated_at,
+            source_input_hash=snapshot,
             requested_provider_id=provider.provider_id,
             request_hint=provider.build_request_hint(task, checkpoint),
             overall_recommendation=ReviewRecommendation.NEEDS_HUMAN_ATTENTION,
@@ -511,6 +526,27 @@ class DoneGateService:
                 self.tasks.save(normalized_task)
         return normalized
 
+    def _input_snapshot(self, task: Task) -> str | None:
+        project = self._require_project()
+        repo = self._resolve_repo_root(None, project=project, data_root=self.data_root)
+        return input_snapshot(task, repo, self.data_root) if repo else None
+
+    def _invalidate_stale_verification(self, task: Task) -> bool:
+        if task.verification_status != VerificationStatus.PASSED:
+            return False
+        current = self._input_snapshot(task)
+        if current == task.verification_input_hash:
+            return False
+        task.verification_status = VerificationStatus.UNKNOWN
+        task.verified_at = None
+        task.done_at = None
+        task.workflow_intent = WorkflowIntent.AWAITING_VERIFICATION
+        task.updated_at = utc_now()
+        self.tasks.save(task)
+        self._emit(task.task_id, "verification_invalidated", {"reason": "verification inputs changed or legacy evidence has no snapshot"})
+        self._sync_state_files()
+        return True
+
     def _sync_state_files(self) -> None:
         self.read_models.sync()
 
@@ -528,7 +564,11 @@ class DoneGateService:
     @_with_write_lock
     def init_project(self, project_name: str, default_branch: str | None = None, repo_root: str | Path | None = None) -> dict[str, Any]:
         now = utc_now()
-        resolved_repo = self._resolve_repo_root(repo_root, data_root=self.data_root)
+        resolved_repo = self._resolve_repo_root(repo_root or self.repo_root, data_root=self.data_root)
+        if self.projects.exists():
+            validate_project_owner(self.data_root, resolved_repo)
+            project = self._require_project()
+            return {"ok": True, "project": project.to_dict(), "data_root": str(self.data_root)}
         project = ProjectState(schema_version=SCHEMA_VERSION, project_id=str(uuid4()), project_name=project_name, created_at=now, updated_at=now, default_branch=default_branch, repo_root=str(resolved_repo) if resolved_repo else None, task_counter=0)
         self.projects.save(project)
         self._init_state_files()
@@ -699,6 +739,8 @@ class DoneGateService:
         repo = self._resolve_repo_root(repo_root, project=project, data_root=self.data_root) or Path.cwd()
         changed_files = self._git_changed_files(repo)
         active_task = self._current_active_task(repo_root=repo)
+        if active_task is not None:
+            self._invalidate_stale_verification(active_task)
         covered_files, uncovered_files = self._classify_changed_files(changed_files, active_task)
         if active_task is not None and active_task.needs_revalidation:
             status = "needs_revalidation"
@@ -748,6 +790,59 @@ class DoneGateService:
         return {"ok": True, "supervision": payload, "errors": []}
 
     @_with_write_lock
+    def get_task(self, task_id: str) -> dict[str, Any]:
+        self._require_project()
+        task = self.tasks.load(task_id)
+        self._invalidate_stale_verification(task)
+        return {"ok": True, "task": self._task_payload(task), "errors": []}
+
+    @_with_write_lock
+    def get_context(self, repo_root: str | Path | None = None) -> dict[str, Any]:
+        project = self._require_project()
+        repo = self._resolve_repo_root(repo_root, project=project, data_root=self.data_root)
+        supervision = self.get_supervision(repo_root=repo)["supervision"]
+        task = supervision.get("active_task")
+        status = supervision["status"]
+        actions = {
+            "needs_task": "create and activate a task covering the changed paths",
+            "task_mismatch": "update task ownership or activate the matching task",
+            "stale_verification": "run task self-test or record current verification",
+            "needs_revalidation": "review the changed spec and rerun verification",
+            "stale_docs": "synchronize required docs and record doc sync",
+        }
+        blockers = [status] if status not in {"clean", "tracked"} else []
+        if task:
+            try:
+                require_transition(self.tasks.load(task["task_id"]), TaskStatus.DONE)
+            except TransitionError as exc:
+                blockers.append(str(exc))
+        next_action = actions.get(status)
+        if task and task.get("blocked_reason"):
+            next_action = "resolve the blocked reason and unblock the task"
+        if next_action is None:
+            if task and task["status"] == "done" and not blockers:
+                next_action = "delivery complete; follow the repository commit and push policy"
+            elif task and task["status"] == "documented" and not blockers:
+                next_action = "mark the task done"
+            elif task and task["verification_status"] != "passed" and task["status"] == "awaiting_verification":
+                next_action = "run task self-test or record current verification"
+            else:
+                next_action = "inspect task acceptance with task_get" if task else "create or activate a task before editing"
+        return {"ok": True, "context": {
+            "project_id": project.project_id,
+            "project_name": project.project_name,
+            "repo_root": str(repo) if repo else None,
+            "data_root": str(self.data_root),
+            "branch": self._git_current_branch(repo),
+            "active_task": compact_payload(task),
+            "status": status,
+            "blockers": blockers,
+            "policy": supervision["policy"],
+            "advisory_summary": compact_payload(supervision.get("advisory_summary", {})),
+            "next_action": next_action,
+        }, "errors": []}
+
+    @_with_write_lock
     def list_tasks(self, status: str | None = None, limit: int | None = None) -> dict[str, Any]:
         self._require_project()
         tasks = self._load_tasks(normalize=True, persist=True)
@@ -763,6 +858,7 @@ class DoneGateService:
         self._require_project()
         task = self.tasks.load(task_id)
         target = self._normalize_task_status(target_status)
+        self._invalidate_stale_verification(task)
         previous_status = task.status
         warnings: list[str] = []
         warning = compatibility_warning(target)
@@ -784,11 +880,16 @@ class DoneGateService:
         return {"ok": True, "task": self._task_payload(task), "events_written": 1, "errors": [], "warnings": warnings}
 
     @_with_write_lock
-    def record_verification(self, task_id: str, result: str, ref: str | None = None, notes: str | None = None) -> dict[str, Any]:
+    def record_verification(self, task_id: str, result: str, ref: str | None = None, notes: str | None = None, *, expected_input_hash: str | None = None) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
         status = self._normalize_verification_status(result)
+        snapshot = self._input_snapshot(task) if status == VerificationStatus.PASSED else None
+        if status == VerificationStatus.PASSED and expected_input_hash is not None and snapshot != expected_input_hash:
+            status = VerificationStatus.FAILED
+            notes = "verification inputs changed before self-test evidence was recorded"
         task = apply_verification(task, status, ref=ref)
+        task.verification_input_hash = (expected_input_hash or snapshot) if status == VerificationStatus.PASSED else None
         record = VerificationRecord(task_id=task_id, result=status, recorded_at=utc_now(), ref=ref, notes=notes)
         self.tasks.save(task)
         self._emit(task.task_id, "verification_recorded", record.to_dict())
@@ -865,6 +966,7 @@ class DoneGateService:
                 provider_id=provider.provider_id,
                 status=ReviewRunStatus.REQUESTED,
                 source_task_updated_at=task.updated_at,
+                source_input_hash=self._input_snapshot(task),
                 requested_provider_id=provider.provider_id,
                 request_hint=provider.build_request_hint(task, checkpoint_enum),
             )
@@ -1013,12 +1115,28 @@ class DoneGateService:
         return {"ok": True, "task": followup["task"], "finding": self._finding_payload(finding), "errors": []}
 
     @_with_write_lock
+    def ensure_verification(self, task_id: str) -> dict[str, Any]:
+        self._require_project()
+        task = self.tasks.load(task_id)
+        self._invalidate_stale_verification(task)
+        if task.verification_status == VerificationStatus.PASSED:
+            return {"ok": True, "task": self._task_payload(task), "reused": True, "errors": []}
+        if not task.test_commands:
+            raise ValidationError(f"{task_id} requires current manual verification; perform acceptance and record it")
+        return self.run_self_test(task_id)
+
+    @_with_write_lock
     def run_self_test(self, task_id: str, workdir: str | None = None) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
         if not task.test_commands:
             raise ValidationError(f"{task_id} has no test_commands configured")
-        target_dir = Path(workdir) if workdir else Path.cwd()
+        project = self._require_project()
+        repo = self._resolve_repo_root(None, project=project, data_root=self.data_root)
+        target_dir = Path(workdir).resolve() if workdir else repo
+        if target_dir != repo:
+            raise ValidationError("self-test workdir must match the task project repo_root")
+        before = self._input_snapshot(task)
         stdout_chunks: list[str] = []
         stderr_chunks: list[str] = []
         exit_code = 0
@@ -1029,6 +1147,10 @@ class DoneGateService:
             if completed.returncode != 0:
                 exit_code = completed.returncode
                 break
+        changed_during_test = before != self._input_snapshot(task)
+        if changed_during_test and exit_code == 0:
+            exit_code = 1
+            stderr_chunks.append("Verification inputs changed during self-test; rerun on stable inputs.")
         artifact_dir = ensure_dir(self.artifacts_dir / task_id)
         timestamp = utc_now().replace(":", "-")
         stdout_path = artifact_dir / f"self-test-{timestamp}.stdout.log"
@@ -1042,7 +1164,16 @@ class DoneGateService:
         task.updated_at = utc_now()
         self.tasks.save(task)
         self._emit(task.task_id, "self_test_recorded", record.to_dict())
-        verification = self.record_verification(task_id, "passed" if exit_code == 0 else "failed", ref=str(stdout_path), notes="self-test")
+        verification = self.record_verification(task_id, "passed" if exit_code == 0 else "failed", ref=str(stdout_path), notes="verification inputs changed during self-test" if changed_during_test else "self-test", expected_input_hash=before)
+        if exit_code == 0 and verification["task"]["verification_status"] != "passed":
+            exit_code = 1
+            record.exit_code = exit_code
+            task = self.tasks.load(task_id)
+            task.last_self_test_exit_code = exit_code
+            self.tasks.save(task)
+            self._emit(task.task_id, "self_test_invalidated", {"reason": verification["record"]["notes"]})
+            self._sync_state_files()
+            verification["task"] = self._task_payload(task)
         verification["self_test"] = record.to_dict()
         verification["exit_code"] = exit_code
         return verification

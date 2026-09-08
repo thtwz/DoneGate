@@ -202,34 +202,59 @@ For Trae-style plugin configs, point the plugin at the same `donegate-mcp-serve`
 
 ## 8. Codex plugin integration
 
-DoneGate ships a repo-local Codex plugin scaffold:
+Install in the environment that launches the server:
 
-```text
-.codex-plugin/plugin.json
-skills/donegate/SKILL.md
-hooks.json
-hooks/donegate-hook.sh
-scripts/donegate-mcp-serve-plugin.sh
-scripts/donegate-mcp-cli-plugin.sh
+```bash
+python3 -m pip install -e ".[mcp]"
 ```
 
-The intended architecture is:
+The canonical skill lives in `skills/donegate/`, including its optional references.
+Copy the complete directory when installing a standalone skill. The plugin manifest
+uses `scripts/donegate-mcp-serve-plugin.sh`; `.mcp.json` offers the same configuration.
+Keep only one active registration per host to avoid duplicated skill/MCP context.
 
-- the skill is the operating protocol
-- the CLI is the mandatory control plane
-- MCP tools are an optional structured agent adapter
-- the plugin is the host packaging shell
-- hooks are non-authoritative triggers
+For a shared Codex MCP, use an absolute installed interpreter or server entrypoint,
+with no fixed data directory:
 
-The plugin manifest starts `donegate_mcp` through `scripts/donegate-mcp-serve-plugin.sh`. That wrapper prefers the repo `.venv`, then a `donegate-mcp-serve` on `PATH`, then a source checkout through `PYTHONPATH=src`.
+```toml
+[mcp_servers.donegate_mcp]
+command = "/absolute/DoneGate/.venv/bin/python"
+args = ["-m", "donegate_mcp.mcp.server"]
+```
 
-For local Codex installation, register this checkout as the plugin source in the Codex/plugin marketplace mechanism you use. The plugin root must be the DoneGate checkout root so `${CODEX_PLUGIN_ROOT}/scripts/donegate-mcp-serve-plugin.sh` resolves correctly.
+Every tool call must supply the target worktree's absolute `repo_root`. A shared
+server never adopts a previous caller's repository or its installation directory.
+Explicit repo targeting wins over inherited defaults; explicit conflicting roots
+and stores owned by another repo are rejected before state changes. A task ID is
+only meaningful with its project. Separate worktrees use separate state directories.
 
-If Codex runs DoneGate as a shared plugin, prefer launching Codex from a shell that already sourced `.donegate-mcp/env.sh` in the target repository. That file exports `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`, which allow the shared MCP process to default to the supervised repository instead of the plugin checkout.
+Use `project_context` for active task, branch, blockers and next action. Fetch
+`task_get` only when full acceptance details are needed. `task_activate` binds an
+existing task; mutation tools accept `compact: true`. The CLI supports equivalent
+operations and global targeting:
 
-If the host process cannot inherit that environment, pass `repo_root` explicitly in DoneGate tool calls.
+```bash
+donegate-mcp --repo-root /absolute/project --json context
+donegate-mcp --repo-root /absolute/project --json task show TASK-0001
+donegate-mcp --repo-root /absolute/project --json --compact task activate TASK-0001
+```
 
-The plugin hook file only runs lightweight `onboarding` / `supervision` probes. It must not become a second implementation of lifecycle rules; enforcement belongs in DoneGate domain/CLI/MCP code.
+In a deliberately project-bound CLI/server, `.donegate-mcp/env.sh` may still be
+used locally. Do not export its project-specific variables globally into a shared
+host. If ownership is wrong, correct the target or reset the specific old store
+with user authorization. `init` on the same store is idempotent and does not erase
+tasks; it cannot take ownership of another project.
+
+Git evidence is bound to scoped working-tree content, spec and acceptance inputs.
+Changing them invalidates verification before delivery; staging or committing the
+same content does not. Self-test uses the project directory, stores logs outside
+the response, and fails if inputs change during execution. Declare generated
+outputs as artifacts or ignore build products in Git to avoid unnecessary rechecks.
+Non-Git repositories still need explicit manual freshness checks.
+
+Reload/reconnect the host's MCP after updating the runtime or configuration. Check
+a fresh stdio server's version and tool list; an already running process retains
+its loaded code. Newly loaded skills use the updated canonical directory.
 
 ## 9. Operational note
 
