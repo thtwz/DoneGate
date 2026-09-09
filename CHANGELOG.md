@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add `donegate-mcp ui`: an independently running local Web dashboard bundled with the Python package, with a persistent multi-project registry and bookmarkable project views.
+- Show task-based completion, blockers, revalidation, feature acceptance references and event history using non-mutating projections of isolated project data.
+- Capture chronological requirement body versions and show change reasons, affected tasks, unified diffs and legacy history limitations.
+- Support live refresh, project registration/removal, custom registry paths and ports, without a frontend build or changes to MCP startup.
+
 ## 0.4.1 — 2026-09-08
 
 - Use one shared MCP across projects with explicit per-call repository targeting. Conflicting ownership is rejected; initialization no longer resets existing tasks.

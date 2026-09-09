@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", dest="as_json")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    ui = sub.add_parser("ui", help="start the local multi-project browser dashboard")
+    ui.add_argument("--port", type=int, default=8765)
+    ui.add_argument("--registry", help="path to the persistent workspace index")
+    ui.add_argument("--project", action="append", default=[], help="absolute repository path to register (repeatable)")
+    ui.add_argument("--no-open", action="store_true", help="do not open a browser automatically")
+
     bootstrap_p = sub.add_parser("bootstrap")
     bootstrap_p.add_argument("--project-name", required=True)
     bootstrap_p.add_argument("--repo-root")
@@ -196,6 +202,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "ui":
+            from donegate_mcp.web.server import run_ui
+            return run_ui(port=args.port, registry_path=args.registry, projects=args.project,
+                          repo_root=args.global_repo_root, data_root=args.data_root, no_open=args.no_open)
         local_repo = getattr(args, "repo_root", None)
         if args.global_repo_root and local_repo and Path(args.global_repo_root).resolve() != Path(local_repo).resolve():
             raise ValidationError("conflicting global and subcommand repo_root")

@@ -44,6 +44,7 @@ from donegate_mcp.storage.fs import append_jsonl, ensure_dir, make_executable, w
 from donegate_mcp.storage.project_store import ProjectStore
 from donegate_mcp.storage.review_store import ReviewFindingStore, ReviewRunStore
 from donegate_mcp.storage.state_store import StateStore
+from donegate_mcp.storage.spec_store import SpecStore
 from donegate_mcp.storage.task_store import TaskStore
 from donegate_mcp.storage.workspace_lock import WorkspaceWriteLock
 
@@ -506,13 +507,13 @@ class DoneGateService:
             changed.append(path)
         return sorted(changed)
 
-    def _spec_snapshot(self, spec_ref: str) -> tuple[int | None, str | None]:
+    def _spec_snapshot(self, spec_ref: str, reason: str = "Initial requirement snapshot", affected_task_ids: list[str] | None = None) -> tuple[int | None, str | None]:
         path = Path(spec_ref)
         if not path.exists():
             return None, None
         content = path.read_text(encoding="utf-8")
-        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
-        return 1, digest
+        row = SpecStore(self.data_root).capture(spec_ref, content, reason, affected_task_ids or [])
+        return row["version"], row["spec_hash"]
 
     def _load_tasks(self, *, normalize: bool = False, persist: bool = False) -> list[Task]:
         tasks = self.tasks.list()
@@ -664,7 +665,7 @@ class DoneGateService:
         project.task_counter += 1
         project.updated_at = utc_now()
         task_id = f"TASK-{project.task_counter:04d}"
-        spec_version, spec_hash = self._spec_snapshot(normalized_spec_ref)
+        spec_version, spec_hash = self._spec_snapshot(normalized_spec_ref, affected_task_ids=[task_id])
         task = Task(
             task_id=task_id,
             title=title,
@@ -1183,7 +1184,15 @@ class DoneGateService:
         project = self._require_project()
         repo_root = self._resolve_repo_root(None, project=project, data_root=self.data_root)
         normalized_spec_ref = self._normalize_repo_path(spec_ref, repo_root) or spec_ref
-        spec_version, spec_hash = self._spec_snapshot(normalized_spec_ref)
+        path = Path(normalized_spec_ref)
+        if not path.is_file():
+            raise ValidationError(f"spec not found: {normalized_spec_ref}")
+        content = path.read_text(encoding="utf-8")
+        spec_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        affected = [task.task_id for task in self.tasks.list()
+                    if task.spec_ref == normalized_spec_ref and task.spec_hash != spec_hash]
+        revision = SpecStore(self.data_root).capture(normalized_spec_ref, content, reason or "spec hash changed", affected)
+        spec_version = revision["version"]
         if spec_hash is None:
             raise ValidationError(f"spec not found: {normalized_spec_ref}")
         changed: list[str] = []
@@ -1195,7 +1204,7 @@ class DoneGateService:
                 task.spec_version = spec_version
                 task.spec_hash = spec_hash
                 self.tasks.save(task)
-                self._emit(task.task_id, "spec_drift_detected", {"spec_ref": normalized_spec_ref, "spec_hash": spec_hash, "reason": task.stale_reason})
+                self._emit(task.task_id, "spec_drift_detected", {"spec_ref": normalized_spec_ref, "spec_hash": spec_hash, "reason": task.stale_reason, "revision_id": revision["id"]})
                 changed.append(task.task_id)
         self._sync_state_files()
         return {"ok": True, "spec_ref": normalized_spec_ref, "spec_version": spec_version, "spec_hash": spec_hash, "changed_tasks": changed, "errors": []}

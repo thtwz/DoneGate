@@ -1,5 +1,41 @@
 # DoneGate
 
+## Local multi-project dashboard
+
+Run `donegate-mcp ui` after installation to open the bundled dashboard at
+`http://127.0.0.1:8765`. It is a separate Web process from MCP and needs no Node
+runtime, frontend build, or external assets. Stop it with Ctrl+C.
+
+```bash
+donegate-mcp --repo-root /absolute/repository ui
+donegate-mcp ui --project /absolute/project-a --project /absolute/project-b --no-open
+donegate-mcp ui --port 8899 --registry /absolute/projects.json
+```
+
+Register initialized workspaces once using the Add project dialog (paths belong
+to the machine running the service). The user index defaults to
+`~/.config/donegate/projects.json`, respecting `XDG_CONFIG_HOME`. Custom data
+directories are supported. Unregistering never deletes project data. Separate
+worktrees retain distinct identities and per-project links; one unavailable
+workspace does not prevent viewing the others.
+
+The portfolio shows derived completion and blockers. Project pages show features
+grouped by spec, searchable statuses, acceptance evidence references, task events,
+and a requirement change timeline. The UI polls every five seconds while retaining
+filters and expanded details. Completion means current done tasks / managed tasks,
+not a time estimate; empty projects have no percentage. Stale verification is
+excluded from completion in a non-mutating read projection.
+
+New task references capture existing requirement bodies. Explicit
+`spec refresh --spec-ref /absolute/spec.md --reason 'why it changed'` captures
+subsequent versions and marks affected tasks for revalidation. Identical refreshes
+do not add versions; reverting text creates a new chronological version. Diffs
+require two saved bodies; legacy events with missing bodies are labeled accordingly.
+Unrecorded file edits are never presented as recorded requirement changes.
+
+The server binds only to loopback. This release covers projects on one machine;
+it does not synchronize developers' computers or provide team authentication.
+
 [![Test](https://img.shields.io/github/actions/workflow/status/thtwz/DoneGate/test.yml?branch=main&label=test)](https://github.com/thtwz/DoneGate/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/thtwz/DoneGate)](https://github.com/thtwz/DoneGate/blob/main/LICENSE)
 [![Package](https://img.shields.io/badge/package-not%20published-lightgrey)](https://github.com/thtwz/DoneGate/releases)
