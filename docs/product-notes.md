@@ -3,11 +3,14 @@
 ## Brand
 
 Project name: `DoneGate`
-Public-facing docs should use `DoneGate`. Code-facing package names should keep `donegate_mcp` / `donegate-mcp` for compatibility.
+The product is **DoneGate**. The installable distribution and primary command are `donegate`.
+Use `donegate ui` for the dashboard and `donegate serve` for optional agent integration.
+Describe project progress, requirement history, and verified delivery first. MCP is an integration protocol and belongs in integration documentation, not in the product name or primary pitch.
+Keep historical Python imports, data directories, environment variables and legacy command aliases compatible. Do not promote compatibility identifiers as the recommended product entrypoint.
 
 ## Core framing
 
-Position v0.1 as a lightweight quality gate for AI-assisted software delivery.
+Position DoneGate as a local-first workspace for project progress, requirement history, and verified software delivery.
 
 This project is not a project manager, not a CI platform, and not a general workflow engine. It is the narrow layer that answers one question reliably: can this task honestly be called done?
 
@@ -41,7 +44,9 @@ DoneGate should explicitly encode the following reusable lessons about acceptanc
 4. **Truth alignment matters more than surface coherence.**
    If observable behavior, boundary responses, and persisted truth disagree, the task has failed acceptance. DoneGate should encourage operators to record this explicitly as a deviation or failed verification, not as an informal note.
 
-## Cut for v0.1
+## Historical v0.1 exclusions
+
+The local multi-project dashboard is now supported. The remaining exclusions below describe the original release scope.
 
 - Full PM system behavior.
 - Fancy dashboards or hosted web UI.

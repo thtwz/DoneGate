@@ -31,7 +31,7 @@ def test_shared_stdio_server_is_unbound_and_keeps_projects_separate(tmp_path):
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
                 initialization = await session.initialize()
-                assert initialization.serverInfo.name == 'donegate_mcp'
+                assert initialization.serverInfo.name == 'donegate'
                 assert initialization.serverInfo.version == '0.4.1'
                 tool_list = await session.list_tools()
                 tools = {tool.name: tool for tool in tool_list.tools}

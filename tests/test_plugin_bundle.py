@@ -27,8 +27,8 @@ def test_codex_plugin_manifest_references_existing_assets() -> None:
 
 def test_codex_plugin_mcp_config_exposes_donegate_server() -> None:
     mcp_config = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))
-    server = mcp_config["mcpServers"]["donegate_mcp"]
+    server = mcp_config["mcpServers"]["donegate"]
 
-    assert server["command"] == "${CODEX_PLUGIN_ROOT}/scripts/donegate-mcp-serve-plugin.sh"
+    assert server["command"] == "${CODEX_PLUGIN_ROOT}/scripts/donegate-serve-plugin.sh"
     assert server["args"] == []
     assert "env" not in server

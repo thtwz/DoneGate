@@ -3,7 +3,7 @@ set -euo pipefail
 
 EVENT="${1:-session-start}"
 PLUGIN_ROOT="${CODEX_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-CLI="${DONEGATE_MCP_CLI:-$PLUGIN_ROOT/scripts/donegate-mcp-cli-plugin.sh}"
+CLI="${DONEGATE_CLI:-${DONEGATE_MCP_CLI:-$PLUGIN_ROOT/scripts/donegate-cli-plugin.sh}}"
 WORKDIR="$(pwd)"
 
 git_root() {

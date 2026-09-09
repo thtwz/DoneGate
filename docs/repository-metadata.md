@@ -4,7 +4,7 @@ Use this file as the source of truth for the GitHub repository's short descripti
 
 ## Suggested GitHub description
 
-`A lightweight quality gate for AI-assisted software delivery.`
+`Project progress, requirement change history, and verified software delivery.`
 
 ## Suggested social preview / short pitch
 
@@ -12,8 +12,8 @@ Use this file as the source of truth for the GitHub repository's short descripti
 
 ## Suggested topics
 
-- `mcp`
-- `model-context-protocol`
+- `project-management`
+- `requirements-management`
 - `ai-agents`
 - `agentic-workflows`
 - `developer-tools`

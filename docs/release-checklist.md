@@ -15,7 +15,7 @@ Use this checklist before tagging or publishing a release.
 - `pyproject.toml` version is correct
 - Package name and CLI entrypoints are correct
 - The public brand is consistently `DoneGate`
-- Python module and CLI names are consistently `donegate_mcp` / `donegate-mcp`
+- Python module and CLI names are consistently `donegate_mcp` / `donegate`
 
 ## Quality gate behavior
 
@@ -27,7 +27,7 @@ Use this checklist before tagging or publishing a release.
 ## Verification
 
 - Run `PYTHONPATH=src pytest -q`
-- Smoke-test the branded CLI with `donegate-mcp --help`
+- Smoke-test the branded CLI with `donegate --help`
 - Run a quick local flow: `init`, `task create`, `task start`, `task submit`, `task done`
 - If self-test behavior changed, run at least one happy-path self-test command
 

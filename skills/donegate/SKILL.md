@@ -1,9 +1,11 @@
 ---
 name: donegate
-description: Govern implementation and delivery in repositories initialized with .donegate-mcp, or handle explicit DoneGate requests. Use before governed edits, completion, commit, or push.
+description: Track DoneGate project delivery and requirement changes. Use before governed edits, completion, commit, or push in initialized repositories.
 ---
 
 # DoneGate
+
+Call the product **DoneGate** and use `donegate` in recommended commands (`donegate ui`, `donegate serve`). Describe project progress, requirement history, and verified delivery. MCP is an optional integration protocol, not the product identity. Legacy identifiers are compatibility details only.
 
 Keep delivery facts in DoneGate; use the user's existing authorization. Discussion and read-only reviews do not create tasks or require delivery gates.
 

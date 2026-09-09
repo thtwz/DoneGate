@@ -31,12 +31,13 @@ def _json_object_list(values: list[str]) -> list[dict]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="donegate-mcp")
+    parser = argparse.ArgumentParser(prog="donegate", description="Project progress, requirement history, and verified delivery")
     parser.add_argument("--data-root", default=None)
     parser.add_argument("--repo-root", dest="global_repo_root", default=None)
     parser.add_argument("--compact", action="store_true", help="omit verbose task details from responses")
     parser.add_argument("--json", action="store_true", dest="as_json")
     sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("serve", help="start the optional agent integration service (MCP over stdio)")
 
     ui = sub.add_parser("ui", help="start the local multi-project browser dashboard")
     ui.add_argument("--port", type=int, default=8765)
@@ -202,6 +203,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command == "serve":
+            from donegate_mcp.mcp.server import main as serve
+            return serve(data_root=args.data_root, repo_root=args.global_repo_root)
         if args.command == "ui":
             from donegate_mcp.web.server import run_ui
             return run_ui(port=args.port, registry_path=args.registry, projects=args.project,

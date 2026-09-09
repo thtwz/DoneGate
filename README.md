@@ -1,15 +1,17 @@
 # DoneGate
 
+**Project progress, requirement history, and verified delivery in one local workspace.**
+
 ## Local multi-project dashboard
 
-Run `donegate-mcp ui` after installation to open the bundled dashboard at
-`http://127.0.0.1:8765`. It is a separate Web process from MCP and needs no Node
+Run `donegate ui` after installation to open the bundled dashboard at
+`http://127.0.0.1:8765`. The dashboard runs independently and needs no Node
 runtime, frontend build, or external assets. Stop it with Ctrl+C.
 
 ```bash
-donegate-mcp --repo-root /absolute/repository ui
-donegate-mcp ui --project /absolute/project-a --project /absolute/project-b --no-open
-donegate-mcp ui --port 8899 --registry /absolute/projects.json
+donegate --repo-root /absolute/repository ui
+donegate ui --project /absolute/project-a --project /absolute/project-b --no-open
+donegate ui --port 8899 --registry /absolute/projects.json
 ```
 
 Register initialized workspaces once using the Add project dialog (paths belong
@@ -80,9 +82,10 @@ DoneGate is intentionally not trying to be:
 
 ## What You Get
 
+- A multi-project visual dashboard for feature completion and requirement history
 - A hook-friendly CLI for local workflows and CI
-- A file-backed state model under `.donegate-mcp/`
-- MCP tool support for agent orchestration
+- Local project data and acceptance evidence
+- Optional integrations for development agents
 - Self-test execution with artifact logging
 - Spec hash tracking and drift detection
 - Deviation logging for intentional exceptions
@@ -108,7 +111,7 @@ DoneGate is intentionally not trying to be:
 ## Codex Plugin
 
 The canonical skill is `skills/donegate/SKILL.md`. The plugin manifest and `.mcp.json`
-start the same MCP server through `scripts/donegate-mcp-serve-plugin.sh`.
+start the same MCP server through `scripts/donegate-serve-plugin.sh`.
 Install the package in its runtime with `pip install -e ".[mcp]"`.
 
 A shared MCP server is intentionally unbound. Pass the target worktree's absolute
@@ -121,7 +124,7 @@ For ordinary work, use `project_context`, `task_get`, and `task_activate`. Set
 full dashboard for project overviews, not on every turn. The CLI equivalent is:
 
 ```bash
-donegate-mcp --repo-root /absolute/project --json context
+donegate --repo-root /absolute/project --json context
 ```
 
 See [0.4.1 changes](CHANGELOG.md) and the [operating reference](skills/donegate/references/operations.md).
@@ -141,7 +144,7 @@ pip install -e ".[mcp,test]"
 After installation:
 
 ```bash
-donegate-mcp --help
+donegate --help
 ```
 
 ### 2. Bootstrap a target repository
@@ -149,7 +152,7 @@ donegate-mcp --help
 From the repository you want DoneGate to supervise:
 
 ```bash
-donegate-mcp bootstrap --project-name my-project --repo-root .
+donegate bootstrap --project-name my-project --repo-root .
 ```
 
 This does four important things:
@@ -166,7 +169,7 @@ Bootstrap writes:
 ### 3. Create and activate a task
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task create \
+donegate --json task create \
   --title "Ship gate" \
   --spec-ref docs/spec.md \
   --verification-mode self-test \
@@ -175,20 +178,20 @@ donegate-mcp --data-root .donegate-mcp --json task create \
   --required-artifact reports/pytest.txt \
   --plan-node-id phase-1-task-a
 
-donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
-donegate-mcp --data-root .donegate-mcp --json task active --repo-root .
+donegate task activate TASK-0001 --repo-root .
+donegate --json task active --repo-root .
 ```
 
 ### 4. Use the gate during implementation
 
 ```bash
-donegate-mcp --data-root .donegate-mcp task start TASK-0001
-donegate-mcp --data-root .donegate-mcp task submit TASK-0001
-donegate-mcp --data-root .donegate-mcp --json task self-test TASK-0001 --workdir .
-donegate-mcp --data-root .donegate-mcp task doc-sync TASK-0001 --result synced --ref docs/plan.md
-donegate-mcp --data-root .donegate-mcp --json task done TASK-0001
+donegate task start TASK-0001
+donegate task submit TASK-0001
+donegate --json task self-test TASK-0001 --workdir .
+donegate task doc-sync TASK-0001 --result synced --ref docs/plan.md
+donegate --json task done TASK-0001
 # later, if the task must be reopened for more work:
-donegate-mcp --data-root .donegate-mcp --json task reopen TASK-0001
+donegate --json task reopen TASK-0001
 ```
 
 ## Typical flow
@@ -214,14 +217,14 @@ This layer is intentionally advisory:
 Advisory review requests are created automatically when a task first crosses into submitted-for-verification and again before it reaches `done`. Re-running the same lifecycle command does not create duplicate pending requests.
 
 ```bash
-donegate-mcp --data-root .donegate-mcp task submit TASK-0001
-donegate-mcp --data-root .donegate-mcp --json review list --task-id TASK-0001 --include-findings
+donegate task submit TASK-0001
+donegate --json review list --task-id TASK-0001 --include-findings
 ```
 
 A human or host LLM can record a review finding:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
+donegate --json task review TASK-0001 \
   --checkpoint manual \
   --provider manual \
   --summary "The literal flow passes, but frequent users still need a faster path." \
@@ -232,8 +235,8 @@ donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
 Then turn a useful finding into tracked work:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task create-from-finding FINDING-1234abcd
-donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks
+donegate --json task create-from-finding FINDING-1234abcd
+donegate --json dashboard --include-tasks
 ```
 
 Findings converted into follow-up tasks move out of the open advisory count and are tracked separately as spawned follow-ups.
@@ -270,23 +273,23 @@ pip install -e ".[mcp,test]"
 Then, in the target repository the model should supervise:
 
 ```bash
-donegate-mcp bootstrap --project-name my-project --repo-root .
+donegate bootstrap --project-name my-project --repo-root .
 source .donegate-mcp/env.sh
-donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent codex
+donegate --json onboarding --repo-root . --agent codex
 ```
 
 If no active task exists yet, the model should:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task list --limit 10
-donegate-mcp --data-root .donegate-mcp --json task create \
+donegate --json task list --limit 10
+donegate --json task create \
   --title "Describe the current work" \
   --spec-ref docs/spec.md
-donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
+donegate task activate TASK-0001 --repo-root .
 ```
 
 From there, the model has enough information to use all major surfaces:
-- CLI commands through `donegate-mcp`
+- CLI commands through `donegate`
 - local hooks through the files installed by `bootstrap`
 - supervision and onboarding through `--json supervision` and `--json onboarding`
 - Hermes MCP through `.donegate-mcp/onboarding/hermes-mcp.yaml`
@@ -297,10 +300,10 @@ From there, the model has enough information to use all major surfaces:
 An LLM integrating DoneGate should follow this sequence:
 
 1. Clone and install DoneGate from this repository.
-2. Run `donegate-mcp bootstrap --project-name ... --repo-root .` inside the target repository.
-3. Read `donegate-mcp --json context` once when entering the target repository.
+2. Run `donegate bootstrap --project-name ... --repo-root .` inside the target repository.
+3. Read `donegate --json context` once when entering the target repository.
 4. Ensure a branch-scoped active task exists before editing code.
-5. Refresh `donegate-mcp --json context` before commits or pushes.
+5. Refresh `donegate --json context` before commits or pushes.
 6. Record verification and doc sync before calling a task done.
 7. Inspect advisory reviews before closing substantial work, and convert accepted outcome gaps into follow-up tasks.
 
@@ -313,11 +316,11 @@ The CLI is the primary stable interface for local adoption and CI wrappers.
 Useful read commands:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks --limit 20
-donegate-mcp --data-root .donegate-mcp --json progress
-donegate-mcp --data-root .donegate-mcp --json plan
-donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
-donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent codex
+donegate --json dashboard --include-tasks --limit 20
+donegate --json progress
+donegate --json plan
+donegate --json supervision --repo-root .
+donegate --json onboarding --repo-root . --agent codex
 ```
 
 ### Hooks
@@ -363,9 +366,9 @@ If any of those disagree, the task is not actually done and should be captured a
 DoneGate stores a repo-local active task context and, when `--repo-root` points to a git repository, binds tasks to the current branch.
 
 ```bash
-donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
-donegate-mcp --data-root .donegate-mcp --json task active --repo-root .
-donegate-mcp --data-root .donegate-mcp task clear-active --repo-root .
+donegate task activate TASK-0001 --repo-root .
+donegate --json task active --repo-root .
+donegate task clear-active --repo-root .
 ```
 
 This makes branch-heavy agent workflows much safer in worktrees and parallel sessions.
@@ -373,7 +376,7 @@ This makes branch-heavy agent workflows much safer in worktrees and parallel ses
 ## Supervision States
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
+donegate --json supervision --repo-root .
 ```
 
 The supervision read model can report:
@@ -416,9 +419,17 @@ For humans:
 
 For LLMs and agent systems:
 1. This README
-2. `donegate-mcp --json onboarding --repo-root . --agent codex`
+2. `donegate --json onboarding --repo-root . --agent codex`
 3. [Startup guide](docs/startup-guide.md)
 4. `.donegate-mcp/onboarding/codex.md` or `.donegate-mcp/onboarding/hermes-mcp.yaml`
+
+## Compatibility
+
+The package and recommended command are `donegate`. Existing `donegate-mcp` and
+`donegate-mcp-serve` commands remain compatibility aliases. Historical Python
+imports, environment variables and project data paths remain supported; existing
+projects need no migration. MCP is an optional integration available through
+`donegate serve`, not part of the product name.
 
 ## Development
 

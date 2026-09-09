@@ -1,7 +1,7 @@
 {
   "name": "donegate",
   "version": "0.4.1",
-  "description": "Spec-driven delivery governance for AI-assisted software work through a canonical skill, MCP tools, and thin hooks.",
+  "description": "Project progress, requirement change history, and verified software delivery.",
   "author": {
     "name": "DoneGate"
   },
@@ -9,24 +9,24 @@
   "repository": "https://github.com/thtwz/DoneGate",
   "license": "Apache-2.0",
   "keywords": [
+    "project-progress",
+    "requirements",
     "delivery",
-    "governance",
-    "mcp",
-    "hooks",
-    "skills"
+    "verification",
+    "developer-tools"
   ],
   "skills": "./skills/",
   "hooks": "./hooks.json",
   "mcpServers": {
-    "donegate_mcp": {
-      "command": "${CODEX_PLUGIN_ROOT}/scripts/donegate-mcp-serve-plugin.sh",
+    "donegate": {
+      "command": "${CODEX_PLUGIN_ROOT}/scripts/donegate-serve-plugin.sh",
       "args": []
     }
   },
   "interface": {
     "displayName": "DoneGate",
-    "shortDescription": "Track delivery tasks through specs, verification, docs, and projected lifecycle state.",
-    "longDescription": "DoneGate keeps AI-assisted delivery honest by combining a host skill for workflow doctrine, MCP tools for deterministic state changes, and hooks for lightweight session and git checks.",
+    "shortDescription": "See project progress, track requirement changes, and verify delivery.",
+    "longDescription": "DoneGate brings project progress, feature completion, requirement history, and acceptance evidence into one local-first workspace for developers and their tools.",
     "developerName": "DoneGate",
     "category": "Coding",
     "capabilities": [

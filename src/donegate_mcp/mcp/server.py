@@ -27,9 +27,16 @@ class SimpleToolServer:
 class DoneGateMcpApp:
     def __init__(self, data_root: str | None = None) -> None:
         self.default_data_root = str(Path(data_root).resolve()) if data_root is not None else None
+        self._bound_context: tuple[str | None, str] | None = None
         self.server = self._build_server()
 
+    def bind_context(self, repo_root: str | None, data_root: str | None) -> None:
+        data, repo = resolve_mcp_context(repo_root, data_root, None)
+        self._bound_context = (str(repo) if repo is not None else None, str(data))
+
     def _resolve_call_context(self, repo_root: str | None = None, data_root: str | None = None) -> tuple[DoneGateService, str | None]:
+        if repo_root is None and data_root is None and self._bound_context is not None:
+            repo_root, data_root = self._bound_context
         resolved_data_root, resolved_repo_root = resolve_mcp_context(repo_root, data_root, self.default_data_root)
         service = DoneGateService(data_root=resolved_data_root, repo_root=resolved_repo_root)
         return service, str(resolved_repo_root) if resolved_repo_root else None
@@ -47,7 +54,7 @@ class DoneGateMcpApp:
             from mcp.server.fastmcp import FastMCP  # type: ignore
             # Use an identifier-safe MCP server name so host tooling can derive
             # stable namespaces without needing to sanitize hyphenated labels.
-            server: Any = FastMCP("donegate_mcp")
+            server: Any = FastMCP("donegate")
             server._mcp_server.version = __version__
         except Exception:
             server = SimpleToolServer()
@@ -219,14 +226,16 @@ def build_app(data_root: str | None = None) -> DoneGateMcpApp:
     return DoneGateMcpApp(data_root=data_root)
 
 
-def main(data_root: str | None = None) -> int:
+def main(data_root: str | None = None, repo_root: str | None = None) -> int:
     resolved_root = data_root or os.environ.get("DONEGATE_MCP_DATA_ROOT")
     app = build_app(resolved_root)
+    if repo_root is not None or data_root is not None:
+        app.bind_context(repo_root, data_root)
     server = app.server
     if hasattr(server, "run"):
         server.run()
         return 0
-    raise SystemExit("donegate-mcp fallback server loaded; install mcp in runtime env")
+    raise SystemExit("DoneGate agent integration requires the optional mcp dependency; install this checkout with pip install -e '.[mcp]'")
 
 
 if __name__ == "__main__":

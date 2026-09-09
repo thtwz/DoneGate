@@ -14,7 +14,7 @@ def test_codex_plugin_manifest_exposes_skill_mcp_and_hooks() -> None:
     assert manifest["name"] == "donegate"
     assert manifest["skills"] == "./skills/"
     assert manifest["hooks"] == "./hooks.json"
-    assert manifest["mcpServers"]["donegate_mcp"]["command"] == "${CODEX_PLUGIN_ROOT}/scripts/donegate-mcp-serve-plugin.sh"
+    assert manifest["mcpServers"]["donegate"]["command"] == "${CODEX_PLUGIN_ROOT}/scripts/donegate-serve-plugin.sh"
 
 
 def test_plugin_hooks_are_thin_triggers() -> None:
@@ -36,6 +36,8 @@ def test_plugin_hooks_are_thin_triggers() -> None:
 def test_plugin_scripts_are_executable() -> None:
     for path in [
         ROOT / "hooks" / "donegate-hook.sh",
+        ROOT / "scripts" / "donegate-cli-plugin.sh",
+        ROOT / "scripts" / "donegate-serve-plugin.sh",
         ROOT / "scripts" / "donegate-mcp-cli-plugin.sh",
         ROOT / "scripts" / "donegate-mcp-serve-plugin.sh",
     ]:

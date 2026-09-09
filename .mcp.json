@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "donegate_mcp": {
-      "command": "${CODEX_PLUGIN_ROOT}/scripts/donegate-mcp-serve-plugin.sh",
+    "donegate": {
+      "command": "${CODEX_PLUGIN_ROOT}/scripts/donegate-serve-plugin.sh",
       "args": []
     }
   }

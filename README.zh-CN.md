@@ -2,13 +2,14 @@
 
 [English README](README.md)
 
-DoneGate 是一个面向 AI 辅助研发场景的、本地优先的交付控制层。
+DoneGate 是一个本地优先的项目进度、需求变更与交付管理工具。
 
-它解决的问题不是“怎么写代码”，而是“什么时候这项工作才真的算完成”。
+开发人员可以在同一个工作空间查看多个项目的进度、功能完成情况、需求历史和验收证据。
 
-## 0.4.1：多项目隔离与精简上下文
+## 多项目管理与交付状态
 
-共享 MCP 不绑定默认项目，每次调用传目标工作区的绝对 `repo_root`。
+统一看板展示多个项目，每个项目的数据和验收状态独立保存。
+命令和工具通过目标工作区的 `repo_root` 定位项目。
 仓库和数据目录归属不一致时直接报错，`init` 不再重置已有任务。
 常规工作用 `project_context` 获取当前任务与阻塞摘要；变更工具支持
 `compact: true`，无需反复读取完整 dashboard 和任务列表。
@@ -17,7 +18,7 @@ DoneGate 是一个面向 AI 辅助研发场景的、本地优先的交付控制�
 重新验证。自测在目标项目运行，未变化的审查结果可复用。建议性审查
 保持非阻塞，纯讨论和只读审查不自动创建交付任务。
 
-CLI：`donegate-mcp --repo-root /绝对/项目路径 --json context`。
+CLI：`donegate --repo-root /绝对/项目路径 --json context`。
 详见 [变更记录](CHANGELOG.md) 和 [操作说明](skills/donegate/references/operations.md)。
 
 ## 项目背景
@@ -57,10 +58,10 @@ DoneGate 主要想做到：
 安装 DoneGate 后，在任意目录启动一个本地服务：
 
 ```bash
-donegate-mcp ui
+donegate ui
 # 启动时登记当前仓库，或一次添加多个项目：
-donegate-mcp --repo-root /绝对/项目路径 ui
-donegate-mcp ui --project /绝对/项目A --project /绝对/项目B --no-open
+donegate --repo-root /绝对/项目路径 ui
+donegate ui --project /绝对/项目A --project /绝对/项目B --no-open
 ```
 
 默认打开 `http://127.0.0.1:8765`。也可在页面点击“添加项目”，填写服务所在机器上
@@ -80,8 +81,8 @@ donegate-mcp ui --project /绝对/项目A --project /绝对/项目B --no-open
 - 页面约每 5 秒读取一次数据，保留筛选和展开状态；单个项目不可用不影响其他项目。
   移除项目仅移除看板索引，任务数据仍在各自 `.donegate-mcp` 中；独立 worktree 单独登记。
 
-页面资源随 Python 包安装，无需 Node 或前端构建。Web 服务与 MCP 是独立进程，
-共用 DoneGate 的领域规则和项目数据，关闭 AI 工具后仍可查看。
+页面资源随 Python 包安装，无需 Node 或前端构建。看板独立运行，
+共用 DoneGate 的交付规则和项目数据，关闭 AI 工具后仍可查看。
 当前仅监听本机回环地址，用于同一机器的多项目展示，不提供跨电脑数据同步、团队登录或远程托管。
 
 ### 1. 安装 DoneGate
@@ -99,7 +100,7 @@ pip install -e ".[mcp,test]"
 进入你想纳管的目标仓库后执行：
 
 ```bash
-donegate-mcp bootstrap --project-name my-project --repo-root .
+donegate bootstrap --project-name my-project --repo-root .
 ```
 
 它会自动完成：
@@ -116,21 +117,21 @@ donegate-mcp bootstrap --project-name my-project --repo-root .
 ### 3. 创建并激活任务
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task create \
+donegate --json task create \
   --title "实现当前需求" \
   --spec-ref docs/spec.md
 
-donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
+donegate task activate TASK-0001 --repo-root .
 ```
 
 ### 4. 开发期间使用门禁
 
 ```bash
-donegate-mcp --data-root .donegate-mcp task start TASK-0001
-donegate-mcp --data-root .donegate-mcp task submit TASK-0001
-donegate-mcp --data-root .donegate-mcp --json task self-test TASK-0001 --workdir .
-donegate-mcp --data-root .donegate-mcp task doc-sync TASK-0001 --result synced --ref docs/plan.md
-donegate-mcp --data-root .donegate-mcp --json task done TASK-0001
+donegate task start TASK-0001
+donegate task submit TASK-0001
+donegate --json task self-test TASK-0001 --workdir .
+donegate task doc-sync TASK-0001 --result synced --ref docs/plan.md
+donegate --json task done TASK-0001
 ```
 
 ## 建议型架构审查
@@ -146,14 +147,14 @@ v0.4 新增了 advisory review 层，用来兜住传统 verification 很难发�
 任务首次进入 `submit` 和 `done` 前会自动留下 advisory review request；重复执行同一个生命周期命令不会产生重复的 pending request：
 
 ```bash
-donegate-mcp --data-root .donegate-mcp task submit TASK-0001
-donegate-mcp --data-root .donegate-mcp --json review list --task-id TASK-0001 --include-findings
+donegate task submit TASK-0001
+donegate --json review list --task-id TASK-0001 --include-findings
 ```
 
 人类或宿主 LLM 可以把审查结论写回 DoneGate：
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
+donegate --json task review TASK-0001 \
   --checkpoint manual \
   --provider manual \
   --summary "流程验收通过了，但高频用户仍然缺少快速路径。" \
@@ -164,8 +165,8 @@ donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
 如果这个发现值得落地，就直接拆成任务：
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task create-from-finding FINDING-1234abcd
-donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks
+donegate --json task create-from-finding FINDING-1234abcd
+donegate --json dashboard --include-tasks
 ```
 
 已经拆成 follow-up task 的 finding 会从 open advisory 计数里移出，并单独作为 spawned follow-up 统计。
@@ -193,9 +194,9 @@ pip install -e ".[mcp,test]"
 ### 2. 在目标仓库里启用 DoneGate
 
 ```bash
-donegate-mcp bootstrap --project-name my-project --repo-root .
+donegate bootstrap --project-name my-project --repo-root .
 source .donegate-mcp/env.sh
-donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent codex
+donegate --json onboarding --repo-root . --agent codex
 ```
 
 ### 3. 确保当前分支有 active task
@@ -203,11 +204,11 @@ donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent c
 如果当前分支还没有任务绑定：
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task list --limit 10
-donegate-mcp --data-root .donegate-mcp --json task create \
+donegate --json task list --limit 10
+donegate --json task create \
   --title "Describe the current work" \
   --spec-ref docs/spec.md
-donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
+donegate task activate TASK-0001 --repo-root .
 ```
 
 ### 4. 使用所有主要功能
@@ -236,9 +237,9 @@ donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
 最稳定的本地接口还是 CLI：
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json dashboard --include-tasks --limit 20
-donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
-donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent codex
+donegate --json dashboard --include-tasks --limit 20
+donegate --json supervision --repo-root .
+donegate --json onboarding --repo-root . --agent codex
 ```
 
 ### Hooks
@@ -262,14 +263,13 @@ Codex 接入建议看：
 - `.donegate-mcp/onboarding/codex.md`
 - `docs/startup-guide.md`
 
-如果 DoneGate 是以“共享插件”的方式被 Codex 启动，最好让 Codex 进程继承 `.donegate-mcp/env.sh` 导出的环境变量。这个文件会提供 `DONEGATE_MCP_ROOT` 和 `DONEGATE_MCP_REPO_ROOT`，这样共享 MCP 会话才能默认指向被纳管的目标仓库，而不是插件安装目录。
-
-如果宿主进程不能继承这些环境变量，MCP 工具调用时就应该显式传 `repo_root`。
+共享插件不绑定默认项目，每次工具调用都应显式传目标工作区的绝对 `repo_root`。
+需要集成服务时运行 `donegate serve`；看板和日常命令可以独立使用。
 
 ## Supervision 状态
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
+donegate --json supervision --repo-root .
 ```
 
 当前可能看到的状态包括：
@@ -296,7 +296,7 @@ donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
 
 如果是 LLM / agent：
 1. [README.md](README.md)
-2. `donegate-mcp --json onboarding --repo-root . --agent codex`
+2. `donegate --json onboarding --repo-root . --agent codex`
 3. [docs/startup-guide.md](docs/startup-guide.md)
 4. `.donegate-mcp/onboarding/codex.md` 或 `.donegate-mcp/onboarding/hermes-mcp.yaml`
 
@@ -307,6 +307,12 @@ donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
 - [贡献指南](CONTRIBUTING.md)
 - [发布检查表](docs/release-checklist.md)
 - [v0.4.0 发布说明](docs/release-notes-v0.4.0.md)
+
+## 兼容说明
+
+安装包和推荐命令统一为 `donegate`。旧命令 `donegate-mcp`、`donegate-mcp-serve`
+仅作为兼容入口保留；已有项目的数据目录、环境变量和 Python 导入路径继续可用，无需迁移数据。
+MCP 是 `donegate serve` 提供的可选集成协议，产品名称始终为 **DoneGate**。
 
 ## 许可证
 

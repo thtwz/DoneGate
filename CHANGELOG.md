@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Add `donegate-mcp ui`: an independently running local Web dashboard bundled with the Python package, with a persistent multi-project registry and bookmarkable project views.
+- Use **DoneGate** as the product identity and `donegate` as the package and primary command. Launch the dashboard with `donegate ui` and optional agent integration with `donegate serve`; existing command aliases and project data remain compatible.
+
+- Add `donegate ui`: an independently running local Web dashboard bundled with the Python package, with a persistent multi-project registry and bookmarkable project views.
 - Show task-based completion, blockers, revalidation, feature acceptance references and event history using non-mutating projections of isolated project data.
 - Capture chronological requirement body versions and show change reasons, affected tasks, unified diffs and legacy history limitations.
 - Support live refresh, project registration/removal, custom registry paths and ports, without a frontend build or changes to MCP startup.

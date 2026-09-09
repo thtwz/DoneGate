@@ -20,7 +20,7 @@ pip install "mcp>=1.9.0"
 After installation, the primary CLI is:
 
 ```bash
-donegate-mcp --help
+donegate --help
 ```
 
 ## 2. Bootstrap a target project
@@ -28,7 +28,7 @@ donegate-mcp --help
 From the target project root, prefer a single bootstrap command:
 
 ```bash
-donegate-mcp bootstrap --project-name my-project --repo-root .
+donegate bootstrap --project-name my-project --repo-root .
 ```
 
 This will:
@@ -46,7 +46,7 @@ The hook installation path is worktree-safe, so linked git worktrees do not need
 If you want to initialize state without installing hooks, use:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp init --project-name my-project
+donegate init --project-name my-project
 ```
 
 ## 4. Recommended manual hook wiring
@@ -68,8 +68,8 @@ export SPEC_REF=docs/spec.md
 For local repository work, you can also set the repo-local active task instead of exporting `TASK_ID` every time:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp task activate TASK-0001 --repo-root .
-donegate-mcp --data-root .donegate-mcp --json task active --repo-root .
+donegate task activate TASK-0001 --repo-root .
+donegate --json task active --repo-root .
 ```
 
 The managed `pre-commit` and `pre-push` hooks will use the active task automatically when `TASK_ID` is absent.
@@ -79,13 +79,13 @@ When `--repo-root .` points at a git repository, DoneGate records the active tas
 You can also ask DoneGate to inspect whether the repository currently has work that is not tied to an active task:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json supervision --repo-root .
+donegate --json supervision --repo-root .
 ```
 
 If you already know which parts of the repository a task should own, declare them up front:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task create \
+donegate --json task create \
   --title "branch context follow-up" \
   --spec-ref docs/spec.md \
   --owned-path src/donegate_mcp \
@@ -112,8 +112,8 @@ Managed hook behavior now uses those statuses before self-test:
 After bootstrap, ask DoneGate for repo-local agent guidance:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent codex
-donegate-mcp --data-root .donegate-mcp --json onboarding --repo-root . --agent hermes
+donegate --json onboarding --repo-root . --agent codex
+donegate --json onboarding --repo-root . --agent hermes
 ```
 
 The response includes the current branch, any branch-bound active task, the generated onboarding file paths, and the next recommended command if work still needs to be attached to a task.
@@ -125,14 +125,14 @@ Advisory review helps agents catch outcome gaps that can pass verification while
 DoneGate creates review requests when a task first enters submitted-for-verification and again before completion. Re-running the same lifecycle command reuses the existing pending request instead of adding duplicates:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp task submit TASK-0001
-donegate-mcp --data-root .donegate-mcp --json review list --task-id TASK-0001 --include-findings
+donegate task submit TASK-0001
+donegate --json review list --task-id TASK-0001 --include-findings
 ```
 
 Record a finding from a human, Codex skill, or other host reviewer:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
+donegate --json task review TASK-0001 \
   --checkpoint manual \
   --provider manual \
   --summary "The implementation passes the literal gate but leaves a user-value gap." \
@@ -143,8 +143,8 @@ donegate-mcp --data-root .donegate-mcp --json task review TASK-0001 \
 Create tracked follow-up work from the finding:
 
 ```bash
-donegate-mcp --data-root .donegate-mcp --json task create-from-finding FINDING-1234abcd
-donegate-mcp --data-root .donegate-mcp --json review disposition FINDING-1234abcd --to accepted
+donegate --json task create-from-finding FINDING-1234abcd
+donegate --json review disposition FINDING-1234abcd --to accepted
 ```
 
 Once a finding is converted into a follow-up task, it is counted separately from open advisories so the dashboard shows unresolved advisory work distinctly from tracked follow-up work.
@@ -164,9 +164,9 @@ If Hermes runs DoneGate from the delivery checkout, the typical setup is:
 
 ```yaml
 mcp_servers:
-  donegate_mcp:
-    command: "/Users/mac/workspace/projects/DoneGate/.venv/bin/donegate-mcp-serve"
-    args: []
+  donegate:
+    command: "/Users/mac/workspace/projects/DoneGate/.venv/bin/donegate"
+    args: ["serve"]
     env:
       DONEGATE_MCP_DATA_ROOT: "/absolute/path/to/.donegate-mcp"
     timeout: 120
@@ -184,14 +184,14 @@ If you use Hermes skills, load the `donegate` skill before governed work so the 
 
 ### Trae / plugin-style MCP clients
 
-For Trae-style plugin configs, point the plugin at the same `donegate-mcp-serve` entrypoint and data root:
+For Trae-style plugin configs, point the plugin at the same `donegate serve` entrypoint and data root:
 
 ```json
 {
   "mcpServers": {
-    "donegate_mcp": {
-      "command": "/Users/mac/workspace/projects/DoneGate/.venv/bin/donegate-mcp-serve",
-      "args": [],
+    "donegate": {
+      "command": "/Users/mac/workspace/projects/DoneGate/.venv/bin/donegate",
+      "args": ["serve"],
       "env": {
         "DONEGATE_MCP_DATA_ROOT": "/absolute/path/to/.donegate-mcp"
       }
@@ -210,16 +210,16 @@ python3 -m pip install -e ".[mcp]"
 
 The canonical skill lives in `skills/donegate/`, including its optional references.
 Copy the complete directory when installing a standalone skill. The plugin manifest
-uses `scripts/donegate-mcp-serve-plugin.sh`; `.mcp.json` offers the same configuration.
+uses `scripts/donegate-serve-plugin.sh`; `.mcp.json` offers the same configuration.
 Keep only one active registration per host to avoid duplicated skill/MCP context.
 
 For a shared Codex MCP, use an absolute installed interpreter or server entrypoint,
 with no fixed data directory:
 
 ```toml
-[mcp_servers.donegate_mcp]
-command = "/absolute/DoneGate/.venv/bin/python"
-args = ["-m", "donegate_mcp.mcp.server"]
+[mcp_servers.donegate]
+command = "/absolute/DoneGate/.venv/bin/donegate"
+args = ["serve"]
 ```
 
 Every tool call must supply the target worktree's absolute `repo_root`. A shared
@@ -234,9 +234,9 @@ existing task; mutation tools accept `compact: true`. The CLI supports equivalen
 operations and global targeting:
 
 ```bash
-donegate-mcp --repo-root /absolute/project --json context
-donegate-mcp --repo-root /absolute/project --json task show TASK-0001
-donegate-mcp --repo-root /absolute/project --json --compact task activate TASK-0001
+donegate --repo-root /absolute/project --json context
+donegate --repo-root /absolute/project --json task show TASK-0001
+donegate --repo-root /absolute/project --json --compact task activate TASK-0001
 ```
 
 In a deliberately project-bound CLI/server, `.donegate-mcp/env.sh` may still be
@@ -262,4 +262,4 @@ For local adoption, the CLI is the primary stable interface. The MCP adapter is 
 
 ## 10. Naming note
 
-The public project name is `DoneGate`. The CLI and Python module path remain `donegate-mcp` and `donegate_mcp` for compatibility.
+The public product, package, and primary command are DoneGate / `donegate`. Historical Python imports remain compatible; use `donegate serve` only when an agent integration is needed.

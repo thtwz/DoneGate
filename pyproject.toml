@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "donegate-mcp"
+name = "donegate"
 version = "0.4.1"
-description = "A delivery quality gate for AI-assisted software work with a hook-friendly CLI and optional MCP server"
+description = "Track project progress, requirement changes, and verified software delivery"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
@@ -19,6 +19,7 @@ mcp = ["mcp>=1.9.0"]
 test = ["pytest>=8.0"]
 
 [project.scripts]
+donegate = "donegate_mcp.cli.main:main"
 donegate-mcp = "donegate_mcp.cli.main:main"
 donegate-mcp-serve = "donegate_mcp.mcp.server:main"
 

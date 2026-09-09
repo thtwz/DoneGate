@@ -435,16 +435,16 @@ class DoneGateService:
         )
         codex_content = (
             f"# DoneGate onboarding for {project.project_name}\n\n"
-            f"1. Source `{env_path}` in the shell that launches Codex so shared plugins inherit `DONEGATE_MCP_ROOT` and `DONEGATE_MCP_REPO_ROOT`.\n"
-            f"2. Start by checking `donegate-mcp --json onboarding --repo-root . --agent codex`.\n"
-            f"3. When calling DoneGate tools from a shared Codex plugin, pass `repo_root` explicitly if the host did not inherit the repo-local environment.\n"
+            f"1. Use DoneGate to track project progress, requirement changes, and verified delivery.\n"
+            f"2. Start by checking `donegate --json onboarding --repo-root . --agent codex`.\n"
+            f"3. Pass the target workspace's absolute `repo_root` on every shared integration call.\n"
             f"4. If no branch task is active, create or activate one before editing code.\n"
-            f"5. Use `donegate-mcp --json task active --repo-root .` to confirm branch binding.\n"
+            f"5. Use `donegate --json task active --repo-root .` to confirm branch binding.\n"
         )
         hermes_content = (
             "# Generated Hermes MCP config snippet\n"
             "mcp_servers:\n"
-            "  donegate_mcp:\n"
+            "  donegate:\n"
             f'    command: "{sys.executable}"\n'
             "    args:\n"
             "      - \"-c\"\n"
@@ -455,7 +455,7 @@ class DoneGateService:
             "        if hasattr(server, 'run'):\n"
             "            server.run()\n"
             "        else:\n"
-            "            print('donegate-mcp fallback server loaded; use CLI for local dev')\n"
+            "            print('DoneGate agent adapter unavailable; use the CLI for local development')\n"
             "    timeout: 120\n"
             "    connect_timeout: 30\n"
         )
@@ -622,9 +622,9 @@ class DoneGateService:
         branch = self._git_current_branch(repo)
         active_task = self._current_active_task(repo_root=repo)
         if active_task is not None:
-            recommended_next_step = "donegate-mcp --data-root .donegate-mcp --json task active --repo-root ."
+            recommended_next_step = "donegate --json task active --repo-root ."
         else:
-            recommended_next_step = "donegate-mcp --data-root .donegate-mcp --json task list --limit 10 && donegate-mcp --data-root .donegate-mcp task activate TASK-XXXX --repo-root ."
+            recommended_next_step = "donegate --json task list --limit 10 && donegate task activate TASK-XXXX --repo-root ."
         return {
             "ok": True,
             "onboarding": {
