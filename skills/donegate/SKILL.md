@@ -9,6 +9,10 @@ Call the product **DoneGate** and use `donegate` in recommended commands (`doneg
 
 Keep delivery facts in DoneGate; use the user's existing authorization. Discussion and read-only reviews do not create tasks or require delivery gates.
 
+## Choose the unit of work
+
+Group related features into bounded batches by dependencies/risk; keep isolated or high-risk work in single mode. Host AI chooses with a rationale; `auto` supplies a default without extra model calls. Use bulk operations and compact context. Develop the group, run focused checks when useful, then shared regression; do not run the full suite after every feature. Declare real test coverage, shared scopes and prerequisites. Reuse valid evidence; broaden checks when impact is uncertain. See [batch workflow](references/batches.md).
+
 ## Work with one project and task
 
 - Resolve the current Git worktree root. Pass its absolute `repo_root` on **every MCP call**; task IDs are local to a project. Never reuse another project's active task, inherited data root, or a previous caller's context. A root/ownership mismatch needs correction, not a new task in the wrong store.

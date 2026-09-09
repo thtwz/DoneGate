@@ -116,15 +116,15 @@ def _require_not_terminal_or_blocked(task: Task, target: TaskStatus) -> None:
 def require_transition(task: Task, target: TaskStatus) -> None:
     task = normalize_task(task)
     current = project_status(task)
-    if current == target:
+    if current == target and target != TaskStatus.DONE:
         return
     if target == TaskStatus.BLOCKED:
         return
     if current == TaskStatus.DONE and target != TaskStatus.DONE:
         return
-    if target in {TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_VERIFICATION, TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE}:
+    if target in {TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_VERIFICATION, TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE} and not (current == target == TaskStatus.DONE):
         _require_not_terminal_or_blocked(task, target)
-    elif not can_transition(current, target):
+    elif current != target and not can_transition(current, target):
         raise TransitionError(f"cannot move {task.task_id} from {current.value} to {target.value}")
     if target in {TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE} and task.needs_revalidation:
         raise TransitionError(f"{task.task_id} requires revalidation due to spec drift: {task.stale_reason or 'spec changed'}")
@@ -194,6 +194,7 @@ def apply_transition(task: Task, target: TaskStatus) -> Task:
 def apply_verification(task: Task, result: VerificationStatus, ref: str | None = None) -> Task:
     timestamp = utc_now()
     task.verification_status = result
+    task.evidence_stale = False
     task.last_verification_ref = ref
     task.updated_at = timestamp
     task.started_at = task.started_at or timestamp
@@ -203,7 +204,6 @@ def apply_verification(task: Task, result: VerificationStatus, ref: str | None =
         task.stale_reason = None
     else:
         task.verified_at = None
-        task.done_at = None
     return normalize_task(task)
 
 

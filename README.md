@@ -1,5 +1,10 @@
 # DoneGate
 
+## Adaptive batches
+
+Develop related features together and share one regression run. The host AI selects single or batch mode, with an automatic recommendation and an explicit rationale. Coverage-bound results can be reused; historical delivery and current verification health are shown separately. See the [batch workflow and runnable example](docs/batch-workflow.md).
+
+
 **Project progress, requirement history, and verified delivery in one local workspace.**
 
 ## Local multi-project dashboard

@@ -1634,3 +1634,13 @@ dialog p {
     transition:none!important;
   }
 }
+
+.batch-panel { margin-bottom: 24px; }
+.batch-item { border-top: 1px solid var(--border, #dce5e2); padding: 16px 0; }
+.batch-item summary { cursor: pointer; display: flex; gap: 16px; align-items: center; justify-content: space-between; }
+.batch-item summary strong { overflow-wrap: anywhere; }
+.batch-item summary > span { white-space: nowrap; font-size: 12px; color: #376653; }
+.batch-item p { margin: 10px 0; }
+.batch-members { display: flex; flex-wrap: wrap; gap: 12px; }
+.batch-members > span { display: flex; align-items: center; gap: 8px; }
+.batch-evidence { font-size: 13px; }

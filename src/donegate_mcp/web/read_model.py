@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from donegate_mcp.domain.evidence import input_snapshot
+from donegate_mcp.domain.batches import batch_evidence_reader
 from donegate_mcp.errors import DoneGateMcpError
 from donegate_mcp.models import Task, VerificationStatus, WorkflowIntent, utc_now
 from donegate_mcp.storage.fs import read_json
@@ -101,14 +102,16 @@ def project_detail(entry: dict[str, Any], *, include_history: bool = True) -> di
     warnings: list[str] = []
     with project_read_lock(data):
         entry = validate_entry(entry)
+        evidence = batch_evidence_reader(repo, data)
         tasks = []
         for path in sorted((data / "tasks").glob("*.json")):
             task = Task.from_dict(read_json(path))
-            stale = task.verification_status == VerificationStatus.PASSED and input_snapshot(task, repo, data) != task.verification_input_hash
+            stale = task.evidence_stale or (task.verification_status == VerificationStatus.PASSED and (input_snapshot(task, repo, data) != task.verification_input_hash or not evidence.current(task)))
             if stale:
                 # Match service freshness semantics on an in-memory task only.
                 task.verification_status = VerificationStatus.UNKNOWN
-                task.verified_at = task.done_at = None
+                task.evidence_stale = True
+                task.verified_at = None
                 task.workflow_intent = WorkflowIntent.AWAITING_VERIFICATION
             row = task.to_dict()
             row["evidence_stale"] = stale
@@ -119,8 +122,20 @@ def project_detail(entry: dict[str, Any], *, include_history: bool = True) -> di
             "completion_rate": round(counts["done"] / len(tasks) * 100, 1) if tasks else None,
             "counts_by_status": dict(counts), "needs_revalidation": sum(bool(t["needs_revalidation"]) for t in tasks),
             "blocked_tasks": counts["blocked"]}
+        summary["stale_evidence_tasks"] = sum(bool(t["evidence_stale"]) for t in tasks)
+        summary["current_verified_tasks"] = sum(t["verification_status"] == "passed" and not t["evidence_stale"] and not t["needs_revalidation"] for t in tasks)
+        summary["verification_attention_tasks"] = sum(t["evidence_stale"] or t["needs_revalidation"] or t["verification_status"] == "failed" for t in tasks)
+        batches = []
+        for path in sorted((data / "batches").glob("BATCH-*.json")):
+            try:
+                batch = read_json(path)
+                if not isinstance(batch, dict) or not isinstance(batch.get("task_ids"), list):
+                    raise ValueError("invalid batch metadata")
+                batches.append({key: batch.get(key) for key in ("batch_id", "title", "task_ids", "mode", "selected_mode", "requested_mode", "rationale", "risk", "latest_run")})
+            except (OSError, ValueError, TypeError) as exc:
+                warnings.append(f"批次记录无法读取：{path.name}: {exc}")
         changes = _changes(data, tasks, warnings) if include_history else []
-    return {"project": entry, "summary": summary, "tasks": tasks, "changes": changes,
+    return {"project": entry, "summary": summary, "tasks": tasks, "batches": batches, "changes": changes,
             "updated_at": utc_now(), "warnings": warnings}
 
 

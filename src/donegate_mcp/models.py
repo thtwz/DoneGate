@@ -110,6 +110,10 @@ class Task:
     doc_sync_status: DocSyncStatus = DocSyncStatus.UNKNOWN
     last_verification_ref: str | None = None
     verification_input_hash: str | None = None
+    evidence_stale: bool = False
+    batch_id: str | None = None
+    manual_acceptance_input_hash: str | None = None
+    manual_acceptance_ref: str | None = None
     last_doc_sync_ref: str | None = None
     verification_mode: str = "manual"
     test_commands: list[str] = field(default_factory=list)
@@ -143,6 +147,7 @@ class Task:
         data["status"] = projected_status.value
         data["projected_status"] = projected_status.value
         data["status_source"] = "projected"
+        data["verification_health"] = "stale" if self.evidence_stale else self.verification_status.value
         return data
 
     def to_storage_dict(self) -> dict[str, Any]:
@@ -177,6 +182,7 @@ class Task:
         payload.pop("status", None)
         payload.pop("projected_status", None)
         payload.pop("status_source", None)
+        payload.pop("verification_health", None)
         return cls(**payload)
 
     @staticmethod

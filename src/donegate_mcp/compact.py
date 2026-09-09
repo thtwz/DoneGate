@@ -7,6 +7,7 @@ _TASK_FIELDS = {
     'task_id', 'title', 'status', 'projected_status', 'workflow_intent', 'owned_paths',
     'verification_status', 'doc_sync_status', 'needs_revalidation', 'blocked_reason',
     'last_verification_ref', 'last_doc_sync_ref', 'advisory_summary',
+    'ok', 'errors', 'error_code', 'evidence_stale', 'verification_health', 'done_at', 'batch_id',
 }
 
 

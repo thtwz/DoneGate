@@ -82,7 +82,8 @@ def test_reads_do_not_mutate_stale_task_and_compute_truthful_progress(tmp_path):
     spec.write_text("Unrecorded edit\n")
     before = files(service.data_root)
     detail = project_detail(row)
-    assert detail["summary"]["done_tasks"] == 0
+    assert detail["summary"]["done_tasks"] == 1
+    assert detail["summary"]["stale_evidence_tasks"] == 1
     assert detail["tasks"][0]["evidence_stale"]
     assert before == files(service.data_root)
     service.refresh_spec(str(spec), reason="Updated requirement")

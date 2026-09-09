@@ -62,6 +62,56 @@ class DoneGateMcpApp:
         return server
 
     def _register_tools(self, server: Any) -> None:
+        def batches_for(repo_root: str | None, data_root: str | None):
+            from donegate_mcp.domain.batches import BatchService
+            service, _ = self._resolve_call_context(repo_root=repo_root, data_root=data_root)
+            return BatchService(service)
+
+        @server.tool("batch_create")
+        @self._guard
+        def batch_create(title: str, task_ids: list[str], mode: str = "auto", rationale: str = "", dependencies: dict[str, list[str]] | None = None, risk: str = "normal", repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).create(title, task_ids, mode=mode, rationale=rationale, dependencies=dependencies, risk=risk)
+
+        @server.tool("batch_list")
+        @self._guard
+        def batch_list(repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).list()
+
+        @server.tool("batch_get")
+        @self._guard
+        def batch_get(batch_id: str, repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).get(batch_id)
+
+        @server.tool("batch_activate")
+        @self._guard
+        def batch_activate(batch_id: str, repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).activate(batch_id)
+
+        @server.tool("batch_active")
+        @self._guard
+        def batch_active(repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).active()
+
+        @server.tool("batch_transition")
+        @self._guard
+        def batch_transition(batch_id: str, target_status: str, repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).transition(batch_id, target_status)
+
+        @server.tool("batch_check")
+        @self._guard
+        def batch_check(batch_id: str, force: bool = False, repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).run(batch_id, force=force)
+
+        @server.tool("batch_record_doc_sync")
+        @self._guard
+        def batch_record_doc_sync(batch_id: str, result: str, ref: str | None = None, notes: str | None = None, repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).doc_sync(batch_id, result, ref=ref, notes=notes)
+
+        @server.tool("task_create_many")
+        @self._guard
+        def task_create_many(tasks: list[dict[str, Any]], repo_root: str | None = None, data_root: str | None = None, compact: bool = False) -> dict[str, Any]:
+            return batches_for(repo_root, data_root).create_tasks(tasks)
+
         @server.tool("project_init")
         @self._guard
         def project_init(project_name: str, default_branch: str | None = None, repo_root: str | None = None, data_root: str | None = None) -> dict[str, Any]:

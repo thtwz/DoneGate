@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add adaptive development batches, shared regression evidence, dependency-aware reuse, bulk operations and branch-bound batch checks.
+- Preserve historical delivery after ordinary code changes and display current verification health separately, with batch summaries in the dashboard.
+
 - Use **DoneGate** as the product identity and `donegate` as the package and primary command. Launch the dashboard with `donegate ui` and optional agent integration with `donegate serve`; existing command aliases and project data remain compatible.
 
 - Add `donegate ui`: an independently running local Web dashboard bundled with the Python package, with a persistent multi-project registry and bookmarkable project views.

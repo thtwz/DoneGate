@@ -62,6 +62,15 @@ TOOLS = {
 }
 
 TOOLS.update({
+    "batch_create": {"title": "str", "task_ids": "list[str]", "mode": "auto|single|batch?", "rationale": "str?", "dependencies": "dict[str,list[str]]?", "risk": "normal|high?", "compact": "bool?", **_TARGET_CONTEXT},
+    "batch_list": {"compact": "bool?", **_TARGET_CONTEXT},
+    "batch_get": {"batch_id": "str", "compact": "bool?", **_TARGET_CONTEXT},
+    "batch_activate": {"batch_id": "str", "compact": "bool?", **_TARGET_CONTEXT},
+    "batch_active": {"compact": "bool?", **_TARGET_CONTEXT},
+    "batch_transition": {"batch_id": "str", "target_status": "str", "compact": "bool?", **_TARGET_CONTEXT},
+    "batch_check": {"batch_id": "str", "force": "bool?", "compact": "bool?", **_TARGET_CONTEXT},
+    "batch_record_doc_sync": {"batch_id": "str", "result": "synced|outdated", "ref": "str?", "notes": "str?", "compact": "bool?", **_TARGET_CONTEXT},
+    "task_create_many": {"tasks": "list[dict]", "compact": "bool?", **_TARGET_CONTEXT},
     "project_context": {**_TARGET_CONTEXT},
     "task_get": {"task_id": "str", **_TARGET_CONTEXT},
     "task_activate": {"task_id": "str", "compact": "bool?", **_TARGET_CONTEXT},

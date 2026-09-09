@@ -30,6 +30,13 @@ def _json_object_list(values: list[str]) -> list[dict]:
     return objects
 
 
+def _read_json_input(value: str, *, file: bool = False):
+    try:
+        return json.loads(Path(value).read_text(encoding="utf-8") if file else value)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValidationError(f"cannot read JSON {'file ' if file else ''}{value!r}: {exc}") from exc
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="donegate", description="Project progress, requirement history, and verified delivery")
     parser.add_argument("--data-root", default=None)
@@ -103,6 +110,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     task = sub.add_parser("task")
     task_sub = task.add_subparsers(dest="task_command", required=True)
+
+    create_many = task_sub.add_parser("create-many", help="create tasks from a JSON list of task creation arguments")
+    create_many.add_argument("--file", required=True)
 
     create = task_sub.add_parser("create")
     create.add_argument("--title", required=True)
@@ -196,6 +206,30 @@ def build_parser() -> argparse.ArgumentParser:
     unblock = task_sub.add_parser("unblock")
     unblock.add_argument("task_id")
     unblock.add_argument("--to", required=True)
+
+    batch = sub.add_parser("batch", help="coordinate task lifecycle and shared verification")
+    batch_sub = batch.add_subparsers(dest="batch_command", required=True)
+    batch_create = batch_sub.add_parser("create")
+    batch_create.add_argument("--title", required=True)
+    batch_create.add_argument("--task-id", action="append", dest="task_ids", required=True)
+    batch_create.add_argument("--mode", choices=["auto", "single", "batch"], default="auto")
+    batch_create.add_argument("--rationale", default="")
+    batch_create.add_argument("--risk", choices=["normal", "high"], default="normal")
+    dependencies = batch_create.add_mutually_exclusive_group()
+    dependencies.add_argument("--dependencies", help="JSON object mapping task IDs to prerequisite ID lists")
+    dependencies.add_argument("--dependencies-file", help="file containing the dependency JSON object")
+    batch_sub.add_parser("list")
+    batch_sub.add_parser("active")
+    for name in ["show", "activate", "start", "submit", "done"]:
+        batch_sub.add_parser(name).add_argument("batch_id")
+    batch_check = batch_sub.add_parser("check", help="run shared verification or reuse current durable evidence")
+    batch_check.add_argument("batch_id")
+    batch_check.add_argument("--force", action="store_true", help="execute all checks without reusing prior runs")
+    batch_docs = batch_sub.add_parser("doc-sync")
+    batch_docs.add_argument("batch_id")
+    batch_docs.add_argument("--result", required=True, choices=["synced", "outdated"])
+    batch_docs.add_argument("--ref")
+    batch_docs.add_argument("--notes")
     return parser
 
 
@@ -241,9 +275,13 @@ def main(argv: list[str] | None = None) -> int:
             payload = _run_review_command(service, args)
         elif args.command == "task":
             payload = _run_task_command(service, args)
+        elif args.command == "batch":
+            payload = _run_batch_command(service, args)
         else:
             raise ValidationError(f"unknown command {args.command}")
         print(render(compact_payload(payload) if args.compact else payload, args.as_json))
+        if args.command == "batch" or (args.command == "task" and args.task_command == "create-many"):
+            return 1 if not payload.get("ok", False) or payload.get("exit_code", 0) != 0 else 0
         if args.command == "task" and args.task_command in {"self-test", "check"}:
             return 1 if payload.get("exit_code", 0) != 0 else 0
         return 0
@@ -268,6 +306,9 @@ def _resolve_service_root(args: argparse.Namespace) -> str | None:
 
 def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dict:
     cmd = args.task_command
+    if cmd == "create-many":
+        from donegate_mcp.domain.batches import BatchService
+        return BatchService(service).create_tasks(_read_json_input(args.file, file=True))
     if cmd == "create":
         return service.create_task(args.title, args.spec_ref, summary=args.summary, verification_mode=args.verification_mode, test_commands=args.test_commands, required_doc_refs=args.required_doc_refs, required_artifacts=args.required_artifacts, owned_paths=args.owned_paths, plan_node_id=args.plan_node_id)
     if cmd == "check":
@@ -322,6 +363,35 @@ def _run_task_command(service: DoneGateService, args: argparse.Namespace) -> dic
     if cmd == "unblock":
         return service.unblock_task(args.task_id, args.to)
     raise ValidationError(f"unknown task command {cmd}")
+
+
+def _run_batch_command(service: DoneGateService, args: argparse.Namespace) -> dict:
+    from donegate_mcp.domain.batches import BatchService
+
+    batches = BatchService(service)
+    cmd = args.batch_command
+    if cmd == "create":
+        dependencies = None
+        if args.dependencies is not None:
+            dependencies = _read_json_input(args.dependencies)
+        elif args.dependencies_file is not None:
+            dependencies = _read_json_input(args.dependencies_file, file=True)
+        return batches.create(args.title, args.task_ids, mode=args.mode, rationale=args.rationale, dependencies=dependencies, risk=args.risk)
+    if cmd == "list":
+        return batches.list()
+    if cmd == "active":
+        return batches.active()
+    if cmd == "show":
+        return batches.get(args.batch_id)
+    if cmd == "activate":
+        return batches.activate(args.batch_id)
+    if cmd in {"start", "submit", "done"}:
+        return batches.transition(args.batch_id, {"start": "in_progress", "submit": "awaiting_verification", "done": "done"}[cmd])
+    if cmd == "check":
+        return batches.run(args.batch_id, force=args.force)
+    if cmd == "doc-sync":
+        return batches.doc_sync(args.batch_id, args.result, ref=args.ref, notes=args.notes)
+    raise ValidationError(f"unknown batch command {cmd}")
 
 
 def _run_review_command(service: DoneGateService, args: argparse.Namespace) -> dict:

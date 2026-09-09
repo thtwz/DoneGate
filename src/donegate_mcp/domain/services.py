@@ -532,15 +532,16 @@ class DoneGateService:
         repo = self._resolve_repo_root(None, project=project, data_root=self.data_root)
         return input_snapshot(task, repo, self.data_root) if repo else None
 
-    def _invalidate_stale_verification(self, task: Task) -> bool:
+    def _invalidate_stale_verification(self, task: Task, evidence_checker=None) -> bool:
         if task.verification_status != VerificationStatus.PASSED:
             return False
         current = self._input_snapshot(task)
-        if current == task.verification_input_hash:
+        from donegate_mcp.domain.batches import BatchService
+        if current == task.verification_input_hash and (evidence_checker(task) if evidence_checker else BatchService(self).evidence_current(task)):
             return False
         task.verification_status = VerificationStatus.UNKNOWN
+        task.evidence_stale = True
         task.verified_at = None
-        task.done_at = None
         task.workflow_intent = WorkflowIntent.AWAITING_VERIFICATION
         task.updated_at = utc_now()
         self.tasks.save(task)
@@ -698,6 +699,11 @@ class DoneGateService:
         resolved_repo = self._resolve_repo_root(repo_root, project=self._require_project(), data_root=self.data_root)
         branch = self._git_current_branch(resolved_repo)
         session["active_task_id"] = task.task_id
+        session["active_batch_id"] = None
+        batch_map = dict(session.get("active_batches_by_branch", {}))
+        if branch:
+            batch_map.pop(branch, None)
+        session["active_batches_by_branch"] = batch_map
         if branch:
             branch_map = dict(session.get("active_tasks_by_branch", {}))
             branch_map[branch] = task.task_id
@@ -739,12 +745,19 @@ class DoneGateService:
         project = self._require_project()
         repo = self._resolve_repo_root(repo_root, project=project, data_root=self.data_root) or Path.cwd()
         changed_files = self._git_changed_files(repo)
+        from donegate_mcp.domain.batch_context import batch_supervision
+        batch_payload = batch_supervision(self, repo, changed_files)
+        if batch_payload is not None:
+            self.states.save_supervision(batch_payload)
+            return {"ok": True, "supervision": batch_payload, "errors": []}
         active_task = self._current_active_task(repo_root=repo)
         if active_task is not None:
             self._invalidate_stale_verification(active_task)
         covered_files, uncovered_files = self._classify_changed_files(changed_files, active_task)
         if active_task is not None and active_task.needs_revalidation:
             status = "needs_revalidation"
+        elif active_task is not None and active_task.done_at and active_task.verification_status != VerificationStatus.PASSED:
+            status = "stale_verification"
         elif not changed_files:
             if (
                 active_task is not None
@@ -803,6 +816,7 @@ class DoneGateService:
         repo = self._resolve_repo_root(repo_root, project=project, data_root=self.data_root)
         supervision = self.get_supervision(repo_root=repo)["supervision"]
         task = supervision.get("active_task")
+        batch = supervision.get("active_batch")
         status = supervision["status"]
         actions = {
             "needs_task": "create and activate a task covering the changed paths",
@@ -817,6 +831,12 @@ class DoneGateService:
                 require_transition(self.tasks.load(task["task_id"]), TaskStatus.DONE)
             except TransitionError as exc:
                 blockers.append(str(exc))
+        if batch:
+            for task_id in batch["task_ids"]:
+                try:
+                    require_transition(self.tasks.load(task_id), TaskStatus.DONE)
+                except TransitionError as exc:
+                    blockers.append(str(exc))
         next_action = actions.get(status)
         if task and task.get("blocked_reason"):
             next_action = "resolve the blocked reason and unblock the task"
@@ -829,6 +849,12 @@ class DoneGateService:
                 next_action = "run task self-test or record current verification"
             else:
                 next_action = "inspect task acceptance with task_get" if task else "create or activate a task before editing"
+        if batch:
+            next_action = ("run batch check after completing the related changes" if status == "stale_verification"
+                           else "synchronize batch docs" if status == "stale_docs"
+                           else "resolve batch blockers" if blockers
+                           else "batch delivery complete" if all(self.tasks.load(t).done_at for t in batch["task_ids"])
+                           else "mark the batch done")
         return {"ok": True, "context": {
             "project_id": project.project_id,
             "project_name": project.project_name,
@@ -836,6 +862,7 @@ class DoneGateService:
             "data_root": str(self.data_root),
             "branch": self._git_current_branch(repo),
             "active_task": compact_payload(task),
+            "active_batch": batch,
             "status": status,
             "blockers": blockers,
             "policy": supervision["policy"],
@@ -859,7 +886,11 @@ class DoneGateService:
         self._require_project()
         task = self.tasks.load(task_id)
         target = self._normalize_task_status(target_status)
-        self._invalidate_stale_verification(task)
+        if target in {TaskStatus.VERIFIED, TaskStatus.DOCUMENTED, TaskStatus.DONE}:
+            from donegate_mcp.domain.batches import BatchService
+            self._invalidate_stale_verification(task, lambda item: BatchService(self).evidence_current(item, live_environment=True))
+        else:
+            self._invalidate_stale_verification(task)
         previous_status = task.status
         warnings: list[str] = []
         warning = compatibility_warning(target)
@@ -889,6 +920,13 @@ class DoneGateService:
         if status == VerificationStatus.PASSED and expected_input_hash is not None and snapshot != expected_input_hash:
             status = VerificationStatus.FAILED
             notes = "verification inputs changed before self-test evidence was recorded"
+        batch_record = bool(ref and Path(ref).is_absolute() and Path(ref).parent == self.data_root / "batch-runs")
+        if task.verification_mode == "manual" and not batch_record:
+            from donegate_mcp.domain.batches import manual_acceptance_snapshot
+            project = self._require_project()
+            repo = self._resolve_repo_root(None, project=project, data_root=self.data_root)
+            task.manual_acceptance_input_hash = manual_acceptance_snapshot(task, repo, self.data_root) if status == VerificationStatus.PASSED else None
+            task.manual_acceptance_ref = ref if status == VerificationStatus.PASSED else None
         task = apply_verification(task, status, ref=ref)
         task.verification_input_hash = (expected_input_hash or snapshot) if status == VerificationStatus.PASSED else None
         record = VerificationRecord(task_id=task_id, result=status, recorded_at=utc_now(), ref=ref, notes=notes)
@@ -1119,6 +1157,11 @@ class DoneGateService:
     def ensure_verification(self, task_id: str) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
+        if task.batch_id:
+            from donegate_mcp.domain.batches import BatchService
+            result = BatchService(self).run(task.batch_id)
+            result["exit_code"] = 0 if result["ok"] else 1
+            return result
         self._invalidate_stale_verification(task)
         if task.verification_status == VerificationStatus.PASSED:
             return {"ok": True, "task": self._task_payload(task), "reused": True, "errors": []}
@@ -1130,6 +1173,8 @@ class DoneGateService:
     def run_self_test(self, task_id: str, workdir: str | None = None) -> dict[str, Any]:
         self._require_project()
         task = self.tasks.load(task_id)
+        if task.batch_id:
+            raise ValidationError(f"{task_id} belongs to {task.batch_id}; use batch check {task.batch_id}")
         if not task.test_commands:
             raise ValidationError(f"{task_id} has no test_commands configured")
         project = self._require_project()
